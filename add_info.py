@@ -1,15 +1,18 @@
 import os
 import logging
+import io
+import asyncio
+from urllib.request import urlopen
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, CallbackContext, ContextTypes
 from telegram import Update, InputMediaPhoto
 from PIL import Image, ImageDraw, ImageFont
-import io
-from requests import get
 import aiohttp
-import asyncio
-from urllib.request import urlopen
-
 from dotenv import load_dotenv
+
+from data import db_session
+from data.cards import Cards
+from data.levels import Levels
+
 
 load_dotenv()
 BOT_TOKEN = os.environ.get('TOKEN')
@@ -35,7 +38,7 @@ async def image_sending(update: Update, context: CallbackContext):
     msg = update.message.text
     img = Image.new("RGB", (324, 200), (255, 241, 206))
     my_font = ImageFont.truetype('sfns-display-bold.ttf', size=18)
-    my_font2 = ImageFont.truetype('globersemiboldfree.ttf', size=18)
+    # my_font2 = ImageFont.truetype('globersemiboldfree.ttf', size=18)
     # decor = Image.open(urlopen(any_picture_url)) # как добавить картинку на отправляемое изображение
     # img.paste(decor, (0, 0))
     draw_text = ImageDraw.Draw(img)
@@ -81,6 +84,7 @@ async def help_command(update, context):
 
 
 def main():
+
     application = Application.builder().token(BOT_TOKEN).build()
     text_handler = MessageHandler(filters.TEXT & ~filters.COMMAND, image_sending)
     application.add_handler(CommandHandler("start", start))
@@ -94,4 +98,12 @@ def main():
 if __name__ == '__main__':
     if os.name == 'nt':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    db_session.global_init("db/cards.db")
+    # i = 1
+    # while i != 128:
+    #     level = Levels(days_period=i)
+    #     db_sess = db_session.create_session()
+    #     db_sess.add(level)
+    #     db_sess.commit()
+    #     i *= 2
     main()
