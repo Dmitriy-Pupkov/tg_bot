@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 ACCESS_KEY = os.environ.get('APIKEY')
+test_tasks = [1, 1, 1, 2, 2, 3, 3, 4, 5, 6, 7]
 
 
 async def get_images(url, session: aiohttp.ClientSession):
@@ -85,6 +86,16 @@ async def help_command(update, context):
     await update.message.reply_text("Я пока не умею помогать....")
 
 
+async def alarm(context: ContextTypes.DEFAULT_TYPE) -> None:
+    job = context.job
+    await context.bot.send_message(job.chat_id, text=f"Beep! {job.data} секунд закончились!")
+
+
+async def show_tasks(update: Update, context: CallbackContext):
+
+    await update.message.reply_text('Сегодня такие уровни на проверке:')
+
+
 def main():
 
     application = Application.builder().token(BOT_TOKEN).build()
@@ -101,6 +112,8 @@ if __name__ == '__main__':
     if os.name == 'nt':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     db_session.global_init("db/cards.db")
+    db_sess = db_session.create_session()
+    period = db_sess.query(Levels).filter(Levels.id == 1).days_period
     # first_card = Cards(front_side=os.path.join('front_sides', '1'), back_side=os.path.join('back_sides', '1'), level=1)
     # db_sess = db_session.create_session()
     # db_sess.add(first_card)
