@@ -36,16 +36,18 @@ async def get_images(url, session: aiohttp.ClientSession):
 
 async def image_sending(update: Update, context: CallbackContext):
     msg = update.message.text
-    img = Image.new("RGB", (324, 200), (255, 241, 206))
-    my_font = ImageFont.truetype('sfns-display-bold.ttf', size=18)
+    img = Image.new("RGB", (485, 300), (255, 241, 206))
+    my_font = ImageFont.truetype('sfns-display-bold.ttf', size=20)
     # my_font2 = ImageFont.truetype('globersemiboldfree.ttf', size=18)
-    # decor = Image.open(urlopen(any_picture_url)) # как добавить картинку на отправляемое изображение
-    # img.paste(decor, (0, 0))
+    # decor = Image.open(urlopen('https://images.unsplash.com/photo-1579362816626-1ea1d0b7fa8a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=Mnw0MjgxMTh8MHwxfHNlYXJjaHwyfHwlRDAlQjQlRDAlQjUlRDAlQkIlRDElOEMlRDElODQlRDAlQjglRDAlQkQlRDElOEJ8cnV8MHx8fHwxNjgwODkwMzk5&ixlib=rb-4.0.3&q=80&w=162&h=100')) # как добавить картинку на отправляемое изображение
+    # img.paste(decor, (100, 100))
     draw_text = ImageDraw.Draw(img)
     draw_text.text((50, 50), msg, font=my_font, fill=('#1C0606'))
     imgByteArr = io.BytesIO()
     img.save(imgByteArr, format='PNG')
     imgByteArr = imgByteArr.getvalue()
+    # with open('front_sides/1.jpg', mode='rb') as pic:
+    #     data = pic.read()
     await update.message.reply_photo(imgByteArr, caption='Вот так будет выглядеть карточка')
 
 
@@ -99,11 +101,8 @@ if __name__ == '__main__':
     if os.name == 'nt':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     db_session.global_init("db/cards.db")
-    # i = 1
-    # while i != 128:
-    #     level = Levels(days_period=i)
-    #     db_sess = db_session.create_session()
-    #     db_sess.add(level)
-    #     db_sess.commit()
-    #     i *= 2
+    # first_card = Cards(front_side=os.path.join('front_sides', '1'), back_side=os.path.join('back_sides', '1'), level=1)
+    # db_sess = db_session.create_session()
+    # db_sess.add(first_card)
+    # db_sess.commit()
     main()
