@@ -86,6 +86,16 @@ async def help_command(update, context):
     await update.message.reply_text("Я пока не умею помогать....")
 
 
+async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Добавляет задание в очередь."""
+    chat_id = update.effective_message.chat_id
+
+    # context.job_queue.run_repeating(alarm, due, chat_id=chat_id, name=str(chat_id), data=due)
+
+    text = "Timer successfully set!"
+    await update.effective_message.reply_text(text)
+
+
 async def alarm(context: ContextTypes.DEFAULT_TYPE) -> None:
     job = context.job
     await context.bot.send_message(job.chat_id, text=f"Beep! {job.data} секунд закончились!")
@@ -112,8 +122,14 @@ if __name__ == '__main__':
     if os.name == 'nt':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     db_session.global_init("db/cards.db")
-    db_sess = db_session.create_session()
-    period = db_sess.query(Levels).filter(Levels.id == 1).days_period
+    # db_sess = db_session.create_session()
+    # i = 1
+    # while i != 128:
+    #     level = Levels(days_period=i)
+    #     db_sess.add(level)
+    #     db_sess.commit()
+    #     i *= 2
+    # period = db_sess.query(Levels).filter(Levels.id == 1)
     # first_card = Cards(front_side=os.path.join('front_sides', '1'), back_side=os.path.join('back_sides', '1'), level=1)
     # db_sess = db_session.create_session()
     # db_sess.add(first_card)
