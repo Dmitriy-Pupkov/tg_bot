@@ -17,8 +17,7 @@ logger = logging.getLogger(__name__)
 MAIN_MENU = ["/start_session", "/set_goal", "/set_notification", "/help"]
 ONE, TWO, THREE, FOUR = range(4)
 
-
-reply_markup = ReplyKeyboardMarkup([['back']])
+reply_markup = ReplyKeyboardMarkup([['/back']])
 
 
 async def start(update: Update, context: CallbackContext):
@@ -33,15 +32,18 @@ async def start(update: Update, context: CallbackContext):
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        'Приветствую!', reply_markup=reply_markup)
+        '''Приветствую! Чтобы продолжить, нажмите на 1 из кнопок:
+"start_session" - Начать сессию.
+"set_goal" - Установить цель повторений.
+"set_notification" - Установить время ежедневного напоминания.
+"help" - Подробная информация по боту.''', reply_markup=reply_markup)
     return ONE
 
 
 async def start_session(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
-    await query.message.reply_text('hbjkbjhk.', reply_markup=reply_markup)
-    await query.edit_message_text('Сессия начата.')
+    await query.message.reply_text('Сессия начата.', reply_markup=reply_markup)
     # await context.bot.edit_message_text('fbsnjgfbj')
     # return await state(update, context)
     return TWO
@@ -50,7 +52,8 @@ async def start_session(update: Update, context: CallbackContext):
 async def set_goal(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text("Установите цель повторений")
+    # await query.edit_message_text("Установите цель повторений")
+    await query.message.reply_text('Установите цель повторений')
     # return await state(update, context)
     return TWO
 
@@ -59,7 +62,7 @@ async def set_notification(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
 
-    await query.edit_message_text("Установите время ежедневного напоминания")
+    await query.message.reply_text("Установите время ежедневного напоминания")
     # await update.message.reply_text("Установите время ежедневного напоминания")
     # return await state(update, context)
     return TWO
@@ -68,13 +71,13 @@ async def set_notification(update: Update, context: CallbackContext):
 async def help(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text('Здесь будет показана справочная информация по боту.')
+    await query.message.reply_text('Здесь будет показана справочная информация по боту.')
     # return await state(update, context)
     return TWO
 
 
 async def state(update: Update, context: CallbackContext):
-    await update.message.reply_text(reply_markup=ReplyKeyboardMarkup([['back']]))
+    await update.message.reply_text('', reply_markup=ReplyKeyboardMarkup([['/back']]))
     return TWO
 
 
