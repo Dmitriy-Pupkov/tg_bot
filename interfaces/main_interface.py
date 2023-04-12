@@ -10,54 +10,68 @@ load_dotenv()
 
 BOT_TOKEN = os.environ.get('TOKEN')
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
 MAIN_MENU = ["/start_session", "/set_goal", "/set_notification", "/help"]
+ONE, TWO, THREE, FOUR = range(4)
 
 
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    return int(query.data)  # проблема
+reply_markup = ReplyKeyboardMarkup([['back']])
 
 
 async def start(update: Update, context: CallbackContext):
-    query = update.callback_query
     keyboard = [
         [
-            InlineKeyboardButton("/start_session", callback_data=1),
-            InlineKeyboardButton("/set_goal", callback_data=2),
+            InlineKeyboardButton("start_session", callback_data=str(ONE)),
+            InlineKeyboardButton("set_goal", callback_data=str(TWO)),
         ],
-        [InlineKeyboardButton("/set_notification", callback_data=3)],
-        [InlineKeyboardButton("/help", callback_data=4)]
+        [InlineKeyboardButton("set_notification", callback_data=str(THREE))],
+        [InlineKeyboardButton("help", callback_data=str(FOUR))]
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
         'Приветствую!', reply_markup=reply_markup)
-
-    # await query.answer()
-    # return int(query.data)
+    return ONE
 
 
 async def start_session(update: Update, context: CallbackContext):
-    await update.message.reply_text(
-        'Сессия начата.')
-    return
-
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text('Сессия начата.')
+    # return await state(update, context)
+    return TWO
 
 async def set_goal(update: Update, context: CallbackContext):
-    await update.message.reply_text("Установите цель повторений")
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text("Установите цель повторений")
+    # return await state(update, context)
+    return TWO
 
 
 async def set_notification(update: Update, context: CallbackContext):
-    await update.message.reply_text("Установите время ежедневного напоминания")
+    query = update.callback_query
+    await query.answer()
 
+    await query.edit_message_text("Установите время ежедневного напоминания")
+    await update.message.reply_text("Установите время ежедневного напоминания")
+    # return await state(update, context)
+    return TWO
 
 async def help(update: Update, context: CallbackContext):
-    await update.message.reply_text('Здесь будет показана справочная информация по боту.')
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text('Здесь будет показана справочная информация по боту.')
+    # return await state(update, context)
+    return TWO
+
+
+async def state(update: Update, context: CallbackContext):
+    await update.message.reply_text(reply_markup=ReplyKeyboardMarkup([['back']]))
+    return TWO
 
 
 async def stop(update: Update, context: CallbackContext):
@@ -69,19 +83,32 @@ def main():
     application = Application.builder().token(BOT_TOKEN).build()
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
-
         states={
-            1: [MessageHandler(filters.TEXT & ~filters.COMMAND, start_session)],
-            2: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_goal)],
-            3: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_notification)],
-            4: [MessageHandler(filters.TEXT & ~filters.COMMAND, help)]
+            ONE: [
+                CallbackQueryHandler(start_session, pattern="^" + str(ONE) + "$"),
+                CallbackQueryHandler(set_goal, pattern="^" + str(TWO) + "$"),
+                CallbackQueryHandler(set_notification, pattern="^" + str(THREE) + "$"),
+                CallbackQueryHandler(help, pattern="^" + str(FOUR) + "$"),
+
+            ],
+            TWO: [CommandHandler('back', start)]
+            # END_ROUTES: [
+            #     CallbackQueryHandler(start_over, pattern="^" + str(ONE) + "$"),
+            #     CallbackQueryHandler(end, pattern="^" + str(TWO) + "$"),
+            # ],
         },
+
+        # states={
+        #     1: [MessageHandler(filters.TEXT & ~filters.COMMAND, start_session)],
+        #     2: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_goal)],
+        #     3: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_notification)],
+        #     4: [MessageHandler(filters.TEXT & ~filters.COMMAND, help)]
+        # },
 
         fallbacks=[CommandHandler('stop', stop)]
     )
 
     application.add_handler(conv_handler)
-    application.add_handler(CallbackQueryHandler(button))
     application.run_polling()
 
 
