@@ -4,7 +4,7 @@ import logging
 from dotenv import load_dotenv
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, CallbackContext, ConversationHandler, \
     ContextTypes, CallbackQueryHandler
-from telegram import ReplyKeyboardMarkup, Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
+from telegram import ReplyKeyboardMarkup, Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, Bot
 
 load_dotenv()
 
@@ -40,9 +40,12 @@ async def start(update: Update, context: CallbackContext):
 async def start_session(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
+    await query.message.reply_text('hbjkbjhk.', reply_markup=reply_markup)
     await query.edit_message_text('Сессия начата.')
+    # await context.bot.edit_message_text('fbsnjgfbj')
     # return await state(update, context)
     return TWO
+
 
 async def set_goal(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -57,9 +60,10 @@ async def set_notification(update: Update, context: CallbackContext):
     await query.answer()
 
     await query.edit_message_text("Установите время ежедневного напоминания")
-    await update.message.reply_text("Установите время ежедневного напоминания")
+    # await update.message.reply_text("Установите время ежедневного напоминания")
     # return await state(update, context)
     return TWO
+
 
 async def help(update: Update, context: CallbackContext):
     query = update.callback_query
