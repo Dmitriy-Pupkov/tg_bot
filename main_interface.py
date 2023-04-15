@@ -51,11 +51,11 @@ def remove_job_if_exists(name, context):
 async def start(update: Update, context: CallbackContext):
     keyboard = [
         [
-            InlineKeyboardButton("начать сессию", callback_data=str(MAIN_MENU)),
-            InlineKeyboardButton("установить цель", callback_data=str(BACK)),
+            InlineKeyboardButton("Начать сессию", callback_data=str(MAIN_MENU)),
+            InlineKeyboardButton("Установить цель", callback_data=str(BACK)),
         ],
         [InlineKeyboardButton("Установить время ежедневного напоминания", callback_data=str(NOTIF_SET))],
-         [InlineKeyboardButton("о методе интервальных повторений", callback_data=str(FOUR))]
+         [InlineKeyboardButton("О методе интервальных повторений", callback_data=str(FOUR))]
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -72,12 +72,10 @@ async def start_session(update: Update, context: CallbackContext):
         context.user_data[SESSION_NUMBER] = 1
         for level in db_sess.query(Levels):
             level.repetition_date = datetime.date.today() + datetime.timedelta(days=FIRST_REP_INTERVAlS[level.id - 1])
-            print(level.repetition_date == datetime.date.today())
+            print(level.repetition_date, datetime.date.today())
             db_sess.commit()
     for_today = []
-    for level in db_sess.query(Levels).filter(Levels.repetition_date == datetime.date.today()): # filter не работает,
-        # результат получается пустой
-        # если его убрать, id  выводятся
+    for level in db_sess.query(Levels).filter(Levels.repetition_date == datetime.date.today().strftime('%Y-%m-%d 00:00:00.000000')):
         print(level.id)
         for_today.append(str(level.id))
     print(for_today)
