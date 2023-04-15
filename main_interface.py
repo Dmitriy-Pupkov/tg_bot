@@ -1,11 +1,16 @@
 import os
 import logging
 import datetime
+import asyncio
 
 from dotenv import load_dotenv
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, CallbackContext, ConversationHandler, \
     ContextTypes, CallbackQueryHandler
 from telegram import ReplyKeyboardMarkup, Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, Bot
+
+from data import db_session
+from data.cards import Cards
+from data.levels import Levels
 
 load_dotenv()
 
@@ -15,6 +20,8 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 logger = logging.getLogger(__name__)
 
+FIRST_REP_INTERVAlS = [0, 0, 1, 3, 11, 23, 55]
+SESSION_NUMBER = 'session_number'
 MAIN_MENU, BACK, NOTIF_SET, FOUR = range(4)
 time_keyboard = [['Назад'],
                   ['8:00', '9:00', '10:00', '11:00'],
@@ -44,27 +51,42 @@ def remove_job_if_exists(name, context):
 async def start(update: Update, context: CallbackContext):
     keyboard = [
         [
-            InlineKeyboardButton("start session", callback_data=str(MAIN_MENU)),
-            InlineKeyboardButton("set goal", callback_data=str(BACK)),
+            InlineKeyboardButton("начать сессию", callback_data=str(MAIN_MENU)),
+            InlineKeyboardButton("установить цель", callback_data=str(BACK)),
         ],
-        [InlineKeyboardButton("set notification", callback_data=str(NOTIF_SET)),
-         InlineKeyboardButton("help", callback_data=str(FOUR))]
+        [InlineKeyboardButton("Установить время ежедневного напоминания", callback_data=str(NOTIF_SET))],
+         [InlineKeyboardButton("о методе интервальных повторений", callback_data=str(FOUR))]
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        '''Вы в глшавном меню! Чтобы продолжить, нажмите на 1 из кнопок:
-"start session" - Начать сессию.
-"set goal" - Установить цель повторений.
-"set notification" - Установить время ежедневного напоминания.
-"help" - Подробная информация по боту.''', reply_markup=reply_markup)
+        '''Вы в главном меню! Чтобы продолжить, нажмите на 1 из кнопок:''', reply_markup=reply_markup)
     return MAIN_MENU
 
 
 async def start_session(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
-    await query.message.reply_text('Отлично! Сессия начата. Сегодня на проверке уровни ...', reply_markup=reply_markup)
+    db_sess = db_session.create_session()
+    if SESSION_NUMBER not in context.user_data.keys():
+        context.user_data[SESSION_NUMBER] = 1
+        for level in db_sess.query(Levels):
+            level.repetition_date = datetime.date.today() + datetime.timedelta(days=FIRST_REP_INTERVAlS[level.id - 1])
+            print(level.repetition_date == datetime.date.today())
+            db_sess.commit()
+    for_today = []
+    for level in db_sess.query(Levels).filter(Levels.repetition_date == datetime.date.today()): # filter не работает,
+        # результат получается пустой
+        # если его убрать, id  выводятся
+        print(level.id)
+        for_today.append(str(level.id))
+    print(for_today)
+    await query.message.reply_text(
+        f'''Отлично! Сессия начата. Сегодня на проверке уровни {', '.join(for_today)}''',
+        reply_markup=reply_markup)  # ReplyKeyboardMarkup([['Закончить сессию']])
+    for level in db_sess.query(Levels).filter(Levels.id.in_(for_today)):
+        repetition_date = level.repetition_date + datetime.timedelta(days=level.days_period)
+        print(repetition_date)
     return BACK
 
 
@@ -160,4 +182,7 @@ def main():
 
 
 if __name__ == '__main__':
+    if os.name == 'nt':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    db_session.global_init("db/cards.db")
     main()

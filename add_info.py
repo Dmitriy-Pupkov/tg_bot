@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 ACCESS_KEY = os.environ.get('APIKEY')
 test_tasks = [1, 1, 1, 2, 2, 3, 3, 4, 5, 6, 7]
+SESSION_NUMBER = 'session_number'
 
 
 async def get_images(url, session: aiohttp.ClientSession):
@@ -106,6 +107,21 @@ async def show_tasks(update: Update, context: CallbackContext):
     await update.message.reply_text('Сегодня такие уровни на проверке:')
 
 
+async def show_levels(update: Update, context: CallbackContext):
+    if context.user_data[SESSION_NUMBER]:
+        pass
+    else:
+        context.user_data[SESSION_NUMBER] = 1
+    db_sess = db_session.create_session()
+    for level in db_sess.query(Levels):
+        pass
+    # user.name = "Измененное имя пользователя"
+    # user.created_date = datetime.datetime.now()
+    db_sess.commit()
+    await update.message.reply_text(
+        '''Во сколько вам напоминать о сессии? Выберите час или введите своё время в 23-часовом формате hh:mm''')
+
+
 def main():
 
     application = Application.builder().token(BOT_TOKEN).build()
@@ -114,6 +130,7 @@ def main():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("search", search))
     application.add_handler(text_handler)
+    application.add_handler(CommandHandler("show_levels", show_levels))
 
     application.run_polling()
 
