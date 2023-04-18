@@ -26,9 +26,15 @@ logger = logging.getLogger(__name__)
 
 FIRST_REP_INTERVAlS = [0, 0, 1, 3, 11, 23, 55]
 SESSION_NUMBER = 'session_number'
+CURRENT_PICTURE = 'current_picture'
+CURRENT_SIDE = 'current_side'
+FINISHED_SIDE = 'finished_side'
+TEXT_STATE = 'text_state'
 (MAIN_MENU, BACK, NOTIF_SET, FOUR, CARD_ADDING,
- WHICH_SIDE, TEXT_AND_IMAGES, USER_TEXT) = map(chr, range(8))
+ WHICH_SIDE, TEXT_AND_IMAGES, USER_TEXT, PROCESSING, CHANGED_TEXT, SAVING_OR_SIDE_CHANGING
+) = map(chr, range(11))
 
+my_font = ImageFont.truetype('sfns-display-bold.ttf', size=20)
 time_keyboard = [['Назад'],
                   ['8:00', '9:00', '10:00', '11:00'],
                   ['12:00', '13:00', '14:00', '15:00'],
@@ -43,6 +49,40 @@ for line in time_keyboard[1:]:
 regex = regex[:-1]
 
 reply_markup = ReplyKeyboardMarkup([['В главное меню']])
+
+
+class CardSide:
+    def __init__(self, side: str, txt=None, text_pasting_coords=(20, 20), additional_pic=None,
+                 img_pasting_coords=(0, 0)):
+        self.side = side
+        self.card_img = None
+        self.decor_img = additional_pic
+        self.text = txt
+        self.decor_coords = img_pasting_coords
+        self.text_coords = text_pasting_coords
+
+    def get_text(self):
+        return self.text
+
+    def get_self_img(self):
+        return self.card_img
+
+    def make_image(self):
+        img = Image.new("RGB", (485, 300), (255, 247, 245))
+        # my_font2 = ImageFont.truetype('globersemiboldfree.ttf', size=18)
+        # decor = Image.open(urlopen('https://images.unsplash.com/photo-1579362816626-1ea1d0b7fa8a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=Mnw0MjgxMTh8MHwxfHNlYXJjaHwyfHwlRDAlQjQlRDAlQjUlRDAlQkIlRDElOEMlRDElODQlRDAlQjglRDAlQkQlRDElOEJ8cnV8MHx8fHwxNjgwODkwMzk5&ixlib=rb-4.0.3&q=80&w=162&h=100')) # как добавить картинку на отправляемое изображение
+        # # class 'PIL.JpegImagePlugin.JpegImageFile
+        # img.paste(decor, (100, 100))
+        draw_text = ImageDraw.Draw(img)
+        if self.text:
+            draw_text.text(self.text_coords, self.text, font=my_font, fill=('#1C0606'))
+        imgByteArr = io.BytesIO()
+        img.save(imgByteArr, format='PNG')
+        imgByteArr = imgByteArr.getvalue()
+        self.card_img = imgByteArr
+        return self.card_img
+        # with open('front_sides/1.jpg', mode='rb') as pic:
+        #     data = pic.read()
 
 
 def remove_job_if_exists(name, context):
@@ -141,6 +181,11 @@ async def card_adding(update: Update, context: CallbackContext):
 
 
 async def add_inf(update: Update, context: CallbackContext):
+    side = update.message.text
+    if side[:-8] == 'Лицевая':
+        context.user_data[CURRENT_SIDE] = 'front'
+    if side[:-8] == 'Обратная':
+        context.user_data[CURRENT_SIDE] = 'back'
     await update.message.reply_text(
         '''Добавьте нужную вам информацию. Помните, что лучше создать много карточек с отдельными фактами, чем одну большую 😉''',
         reply_markup=ReplyKeyboardMarkup([['Добавить текст'], ['Добавить изображение']]))
@@ -151,10 +196,6 @@ async def text(update: Update, context: CallbackContext):
     await update.message.reply_text('Напишите текст, который хотите видеть на этой стороне',
                                     reply_markup=ReplyKeyboardRemove())
     return USER_TEXT
-    # await update.message.reply_text(
-    #     '''Добавьте нужную вам информацию. Помните, что лучше создать много карточек с отдельными фактами, чем одну большую 😉''',
-    #     reply_markup=ReplyKeyboardMarkup([['добавить текст'], ['Добавить изображение']]))
-    # return WHICH_SIDE
 
 
 async def image(update: Update, context: CallbackContext):
@@ -163,20 +204,60 @@ async def image(update: Update, context: CallbackContext):
 
 async def text_adding(update: Update, context: CallbackContext):
     msg = update.message.text
-    img = Image.new("RGB", (485, 300), (255, 241, 206))
-    my_font = ImageFont.truetype('sfns-display-bold.ttf', size=20)
-    # my_font2 = ImageFont.truetype('globersemiboldfree.ttf', size=18)
-    # decor = Image.open(urlopen('https://images.unsplash.com/photo-1579362816626-1ea1d0b7fa8a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=Mnw0MjgxMTh8MHwxfHNlYXJjaHwyfHwlRDAlQjQlRDAlQjUlRDAlQkIlRDElOEMlRDElODQlRDAlQjglRDAlQkQlRDElOEJ8cnV8MHx8fHwxNjgwODkwMzk5&ixlib=rb-4.0.3&q=80&w=162&h=100')) # как добавить картинку на отправляемое изображение
-    # img.paste(decor, (100, 100))
-    draw_text = ImageDraw.Draw(img)
-    draw_text.text((50, 50), msg, font=my_font, fill=('#1C0606'))
-    imgByteArr = io.BytesIO()
-    img.save(imgByteArr, format='PNG')
-    imgByteArr = imgByteArr.getvalue()
-    # with open('front_sides/1.jpg', mode='rb') as pic:
-    #     data = pic.read()
-    await update.message.reply_photo(imgByteArr, caption='Вот так будет выглядеть эта сторона',
-                                     reply_markup=ReplyKeyboardMarkup([['Изменить'], ['Дополнить'], ['Сохранить'],]))
+    context.user_data[CURRENT_PICTURE] = \
+        CardSide(context.user_data[CURRENT_SIDE], msg, text_pasting_coords=(50, 50))
+    await update.message.reply_photo(context.user_data[CURRENT_PICTURE].make_image(),
+                                     caption='Вот так будет выглядеть эта сторона',
+                                     reply_markup=ReplyKeyboardMarkup([['Изменить'], ['Дополнить'], ['Сохранить'], ]))
+    return PROCESSING
+
+
+async def change(update: Update, context: CallbackContext):
+    context.user_data[TEXT_STATE] = update.message.text
+    await update.message.reply_text('Напишите текст, который хотите добавить или на который заменить',
+                                    reply_markup=ReplyKeyboardMarkup([['Сохранить']]))
+
+    return CHANGED_TEXT
+
+
+async def change_card(update: Update, context: CallbackContext):
+    old_text = context.user_data[CURRENT_PICTURE].get_text()
+    new_text = ''
+    if context.user_data[TEXT_STATE] == 'Изменить':
+        new_text = update.message.text
+    if context.user_data[TEXT_STATE] == 'Дополнить':
+        new_text = old_text + update.message.text
+    # card_img = context.user_data[CURRENT_PICTURE].get_self_img()
+    context.user_data[CURRENT_PICTURE] = CardSide(context.user_data[CURRENT_SIDE], new_text)
+    await update.message.reply_photo(context.user_data[CURRENT_PICTURE].make_image(), caption='Вот так будет выглядеть эта сторона',
+                                     reply_markup=ReplyKeyboardMarkup([['Изменить'], ['Дополнить'], ['Сохранить']]))
+    return PROCESSING
+
+
+async def saving(update: Update, context: CallbackContext):
+    if FINISHED_SIDE in context.user_data.keys():
+        save_button = 'Сохранить карту'
+    else:
+        save_button = 'Сохранить и перейти на другую сторону'
+    await update.message.reply_text('Хорошо, эта часть сохранена', reply_markup=ReplyKeyboardMarkup([['Добавить текст',
+                                            'Добавить изображение'], [save_button]]))
+    return SAVING_OR_SIDE_CHANGING
+
+
+async def side_changing(update: Update, context: CallbackContext):
+    context.user_data[FINISHED_SIDE] = context.user_data[CURRENT_SIDE]
+    if context.user_data[FINISHED_SIDE] == 'front':
+        context.user_data[CURRENT_SIDE] = 'back'
+    else:
+        context.user_data[CURRENT_SIDE] = 'front'
+    await update.message.reply_text('Отлично, вы оформили одну сторону карточки, теперь давайте оформим вторую!',
+                                    reply_markup=ReplyKeyboardMarkup([['Добавить текст'],
+                                            ['Добавить изображение']]))
+    return TEXT_AND_IMAGES
+
+
+async def card_saving(update: Update, context: CallbackContext):
+    pass
 
 
 async def help(update: Update, context: CallbackContext):
@@ -217,6 +298,18 @@ def main():
             TEXT_AND_IMAGES: [MessageHandler(filters.Regex("^(Добавить текст)$") & ~filters.COMMAND, text),
                           MessageHandler(filters.Regex("^(Добавить изображение)$") & ~filters.COMMAND, image)],
             USER_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, text_adding)],
+            PROCESSING: [MessageHandler(filters.Regex("^(Изменить)$") & ~filters.COMMAND, change),
+                          MessageHandler(filters.Regex("^(Дополнить)$") & ~filters.COMMAND, change),
+                         MessageHandler(filters.Regex("^(Сохранить)$") & ~filters.COMMAND, saving)],
+            CHANGED_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, change_card),
+                           MessageHandler(filters.Regex("^(Сохранить)$") & ~filters.COMMAND, saving)],
+            SAVING_OR_SIDE_CHANGING: [MessageHandler(filters.Regex("^(Добавить текст)$") & ~filters.COMMAND, text),
+                              MessageHandler(
+                                  filters.Regex("^(Сохранить и перейти на другую сторону)$") & ~filters.COMMAND,
+                                  side_changing),
+                              MessageHandler(filters.Regex("^(Добавить изображение)$") & ~filters.COMMAND, image),
+                                      MessageHandler(filters.Regex("^(сохранить карту)$") & ~filters.COMMAND, card_saving)],
+
             # END_ROUTES: [
             #     CallbackQueryHandler(start_over, pattern="^" + str(ONE) + "$"),
             #     CallbackQueryHandler(end, pattern="^" + str(TWO) + "$"),
