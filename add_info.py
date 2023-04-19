@@ -45,6 +45,7 @@ async def image_sending(update: Update, context: CallbackContext):
     # img.paste(decor, (100, 100))
     draw_text = ImageDraw.Draw(img)
     draw_text.text((50, 50), msg, font=my_font, fill=('#1C0606'))
+    print(draw_text.textsize(msg, my_font))
     imgByteArr = io.BytesIO()
     img.save(imgByteArr, format='PNG')
     imgByteArr = imgByteArr.getvalue()

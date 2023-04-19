@@ -8,7 +8,8 @@ from urllib.request import urlopen
 from dotenv import load_dotenv
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, CallbackContext, ConversationHandler, \
     ContextTypes, CallbackQueryHandler
-from telegram import ReplyKeyboardMarkup, Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, Bot
+from telegram import ReplyKeyboardMarkup, Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, \
+    InputMediaPhoto
 from PIL import Image, ImageDraw, ImageFont
 import aiohttp
 
@@ -19,6 +20,7 @@ from data.levels import Levels
 load_dotenv()
 
 BOT_TOKEN = os.environ.get('TOKEN')
+ACCESS_KEY = os.environ.get('APIKEY')
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -31,18 +33,22 @@ FINISHED_PICTURE = 'finished_picture'
 CURRENT_SIDE = 'current_side'
 FINISHED_SIDE = 'finished_side'
 TEXT_STATE = 'text_state'
+USER_QUERY = 'image_query'
+NUMBERS_REGEX = 'numbers_regex'
 (MAIN_MENU, BACK, NOTIF_SET, FOUR, CARD_ADDING,
- WHICH_SIDE, TEXT_AND_IMAGES, USER_TEXT, PROCESSING, CHANGED_TEXT, SAVING_OR_SIDE_CHANGING
-) = map(chr, range(11))
+ WHICH_SIDE, TEXT_AND_IMAGES, USER_TEXT, PROCESSING, CHANGED_TEXT, SAVING_OR_SIDE_CHANGING,
+ USER_CHOICE, USER_FILE, IMAGE_QUERY, NUMBER_OF_PICTURES, WHICH_IMAGE
+ ) = map(chr, range(16))
+numbers = ''
 
 my_font = ImageFont.truetype('sfns-display-bold.ttf', size=20)
 time_keyboard = [['Назад'],
-                  ['8:00', '9:00', '10:00', '11:00'],
-                  ['12:00', '13:00', '14:00', '15:00'],
-                  ['16:00', '17:00', '18:00', '19:00'],
-                  ['20:00', '21:00', '22:00', '23:00'],
-                  ['0:00', '1:00', '2:00', '3:00'],
-                  ['4:00', '5:00', '6:00', '7:00']]
+                 ['8:00', '9:00', '10:00', '11:00'],
+                 ['12:00', '13:00', '14:00', '15:00'],
+                 ['16:00', '17:00', '18:00', '19:00'],
+                 ['20:00', '21:00', '22:00', '23:00'],
+                 ['0:00', '1:00', '2:00', '3:00'],
+                 ['4:00', '5:00', '6:00', '7:00']]
 time_markup = ReplyKeyboardMarkup(time_keyboard, one_time_keyboard=True)
 regex = ''
 for line in time_keyboard[1:]:
@@ -77,6 +83,8 @@ class CardSide:
         draw_text = ImageDraw.Draw(img)
         if self.text:
             draw_text.text(self.text_coords, self.text, font=my_font, fill=('#1C0606'))
+        # print(draw_text.textsize(self.text, my_font)) с помощью этой штуки переводить текст на другую строчку,
+        # она возвращает размер этого текста
         imgByteArr = io.BytesIO()
         img.save(imgByteArr, format='PNG')
         imgByteArr = imgByteArr.getvalue()
@@ -84,8 +92,6 @@ class CardSide:
         return self.card_img
         # with open('front_sides/1.jpg', mode='rb') as pic:
         #     data = pic.read()
-
-
 
 
 def remove_job_if_exists(name, context):
@@ -97,6 +103,11 @@ def remove_job_if_exists(name, context):
     return True
 
 
+def make_regex(number):
+    string = '|'.join(map(str, range(1, number + 1)))
+    return string
+
+
 async def start(update: Update, context: CallbackContext):
     keyboard = [
         [
@@ -104,7 +115,7 @@ async def start(update: Update, context: CallbackContext):
             InlineKeyboardButton("Установить цель", callback_data=str(BACK)),
         ],
         [InlineKeyboardButton("Установить время ежедневного напоминания", callback_data=str(NOTIF_SET))],
-         [InlineKeyboardButton("О методе интервальных повторений", callback_data=str(FOUR))]
+        [InlineKeyboardButton("О методе интервальных повторений", callback_data=str(FOUR))]
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -121,18 +132,19 @@ async def start_session(update: Update, context: CallbackContext):
         context.user_data[SESSION_NUMBER] = 1
         for level in db_sess.query(Levels):
             level.repetition_date = datetime.date.today() + datetime.timedelta(days=FIRST_REP_INTERVAlS[level.id - 1])
-            print(level.repetition_date, datetime.date.today())
+            # print(level.repetition_date, datetime.date.today())
             db_sess.commit()
     for_today = []
-    for level in db_sess.query(Levels).filter(Levels.repetition_date == datetime.date.today().strftime('%Y-%m-%d 00:00:00.000000')):
+    for level in db_sess.query(Levels).filter(
+            Levels.repetition_date == datetime.date.today().strftime('%Y-%m-%d 00:00:00.000000')):
         for_today.append(str(level.id))
 
     await query.message.reply_text(
         f'''Отлично! Сессия начата. Сегодня на проверке уровни {', '.join(sorted(for_today, reverse=True))}''',
         reply_markup=ReplyKeyboardMarkup([['В главное меню'], ['Добавить новую карту']]))
-    for level in db_sess.query(Levels).filter(Levels.id.in_(for_today)):
-        repetition_date = level.repetition_date + datetime.timedelta(days=level.days_period)
-        print(repetition_date)
+    # for level in db_sess.query(Levels).filter(Levels.id.in_(for_today)):
+    #     repetition_date = level.repetition_date + datetime.timedelta(days=level.days_period)
+    #     print(repetition_date)
     return CARD_ADDING
 
 
@@ -202,12 +214,8 @@ async def text(update: Update, context: CallbackContext):
     return USER_TEXT
 
 
-async def image(update: Update, context: CallbackContext):
-    await update.message.reply_text('Тут можно будет добавить картинку')
-
-
 async def text_adding(update: Update, context: CallbackContext):
-    msg = update.message.text
+    msg = update.message.text + ' '
     context.user_data[CURRENT_PICTURE] = \
         CardSide(context.user_data[CURRENT_SIDE], msg)
     await update.message.reply_photo(context.user_data[CURRENT_PICTURE].make_image(),
@@ -281,6 +289,65 @@ async def card_saving(update: Update, context: CallbackContext):
     return CARD_ADDING
 
 
+async def image(update: Update, context: CallbackContext):
+    await update.message.reply_text('Какое изображение вы хотите добавить?',
+                                    reply_markup=ReplyKeyboardMarkup([['Добавить свой файл'], ['Поиск картинки']]))
+    return USER_CHOICE
+
+
+async def file_adding(update: Update, context: CallbackContext):
+    await update.message.reply_text(
+        'Отправьте файл изображения, которое хотите видеть на карточке в формате jpg или png')
+    # return USER_CHOICE
+
+
+async def get_images(url, session: aiohttp.ClientSession):
+    headers = {'Authorization': f'Client-ID {ACCESS_KEY}'}
+    async with session.get(url, allow_redirects=True, headers=headers) as resp:
+        json_response = await resp.json()
+        return json_response
+
+
+async def image_query(update: Update, context: CallbackContext):
+    await update.message.reply_text('Введите запрос для поиска нужного Вам изображения',
+                                    reply_markup=ReplyKeyboardMarkup([['Назад']]))
+    return IMAGE_QUERY
+
+
+async def number_of_pictures(update: Update, context: CallbackContext):
+    context.user_data[USER_QUERY] = update.message.text
+    await update.message.reply_text('Сколько изображений вы хотите увидеть? Отправьте число от 1 до 20')
+    return NUMBER_OF_PICTURES
+
+
+async def image_search(update: Update, context: CallbackContext):
+    global numbers
+    number = 1
+    try:
+        number = int(update.message.text)
+    except ValueError as err:
+        logger.error(err)
+        await update.effective_message.reply_text('Извините, количество страниц должно быть числом')
+        return
+    numbers = make_regex(number)
+    url = f'https://api.unsplash.com/search/photos?page=1&query={context.user_data[USER_QUERY]}&per_page={number}&lang=ru'
+    async with aiohttp.ClientSession() as session:
+        task = [get_images(url, session)]
+        for future in asyncio.as_completed(task):
+            data = await future
+    pictures_urls = list(map(InputMediaPhoto, [picture['urls']['small'] for picture in data['results']]))
+    print(pictures_urls)
+    await context.bot.send_media_group(update.effective_message.chat_id, pictures_urls)
+    await update.message.reply_text('Какое изображение добавить?',
+                                    reply_markup=ReplyKeyboardMarkup([list(str(n)) for n in range(1, number + 1)]))
+
+    return WHICH_IMAGE
+
+
+def image_adding(update: Update, context: CallbackContext):
+    pass
+
+
 async def help(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
@@ -315,12 +382,12 @@ def main():
             CARD_ADDING: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start),
                           MessageHandler(filters.Regex("^(Добавить новую карту)$") & ~filters.COMMAND, card_adding)],
             WHICH_SIDE: [MessageHandler(filters.Regex("^(Лицевая сторона)$") & ~filters.COMMAND, add_inf),
-                          MessageHandler(filters.Regex("^(Обратная сторона)$") & ~filters.COMMAND, add_inf)],
+                         MessageHandler(filters.Regex("^(Обратная сторона)$") & ~filters.COMMAND, add_inf)],
             TEXT_AND_IMAGES: [MessageHandler(filters.Regex("^(Добавить текст)$") & ~filters.COMMAND, text),
-                          MessageHandler(filters.Regex("^(Добавить изображение)$") & ~filters.COMMAND, image)],
+                              MessageHandler(filters.Regex("^(Добавить изображение)$") & ~filters.COMMAND, image)],
             USER_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, text_adding)],
             PROCESSING: [MessageHandler(filters.Regex("^(Изменить)$") & ~filters.COMMAND, change),
-                          MessageHandler(filters.Regex("^(Дополнить)$") & ~filters.COMMAND, change),
+                         MessageHandler(filters.Regex("^(Дополнить)$") & ~filters.COMMAND, change),
                          MessageHandler(filters.Regex("^(Сохранить)$") & ~filters.COMMAND, saving)],
             CHANGED_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND &
                                           ~filters.Regex("^(Сохранить)$"), change_card),
@@ -333,7 +400,13 @@ def main():
                                                      image),
                                       MessageHandler(filters.Regex("^(Сохранить карту)$") & ~filters.COMMAND,
                                                      card_saving)],
-
+            USER_CHOICE: [MessageHandler(filters.Regex("^(Добавить свой файл)$") & ~filters.COMMAND, file_adding),
+                          MessageHandler(filters.Regex("^(Поиск картинки)$") & ~filters.COMMAND, image_query)],
+            IMAGE_QUERY: [MessageHandler(filters.TEXT & ~filters.COMMAND &
+                                         ~filters.Regex("^(Назад)$"), number_of_pictures),
+                          MessageHandler(filters.Regex("^(Назад)$") & ~filters.COMMAND, add_inf)],
+            NUMBER_OF_PICTURES: [MessageHandler(filters.TEXT & ~filters.COMMAND, image_search)],
+            WHICH_IMAGE: [MessageHandler(filters.Regex(f"^({numbers})$") & ~filters.COMMAND, image_adding)]
             # END_ROUTES: [
             #     CallbackQueryHandler(start_over, pattern="^" + str(ONE) + "$"),
             #     CallbackQueryHandler(end, pattern="^" + str(TWO) + "$"),
