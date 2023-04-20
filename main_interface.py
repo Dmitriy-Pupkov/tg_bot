@@ -16,6 +16,7 @@ import aiohttp
 from data import db_session
 from data.cards import Cards
 from data.levels import Levels
+from data.users import Users
 
 load_dotenv()
 
@@ -128,12 +129,22 @@ async def start_session(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
     db_sess = db_session.create_session()
-    if SESSION_NUMBER not in context.user_data.keys():
-        context.user_data[SESSION_NUMBER] = 1
-        for level in db_sess.query(Levels):
-            level.repetition_date = datetime.date.today() + datetime.timedelta(days=FIRST_REP_INTERVAlS[level.id - 1])
-            # print(level.repetition_date, datetime.date.today())
-            db_sess.commit()
+    iters = []
+    for i in db_sess.query(Users.user_id):
+        iters.append(i[0])
+    if update.effective_message.chat_id not in iters:
+        print(update.effective_message.chat_id, iters)  #
+        if SESSION_NUMBER not in context.user_data.keys():
+            context.user_data[SESSION_NUMBER] = 1
+            for level in db_sess.query(Levels):
+                level.repetition_date = datetime.date.today() + datetime.timedelta(
+                    days=FIRST_REP_INTERVAlS[level.id - 1])
+                # print(level.repetition_date, datetime.date.today())
+                db_sess.commit()
+            # Алгоритм добавления id пользователя в БД (не доделан):
+            # for user in db_sess.query(Levels):
+            #     user.user_id = update.message.chat_id
+            #     db_sess.commit()
     for_today = []
     for level in db_sess.query(Levels).filter(
             Levels.repetition_date == datetime.date.today().strftime('%Y-%m-%d 00:00:00.000000')):
