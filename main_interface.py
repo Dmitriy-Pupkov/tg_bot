@@ -38,8 +38,8 @@ USER_QUERY = 'image_query'
 NUMBERS_REGEX = 'numbers_regex'
 (MAIN_MENU, BACK, NOTIF_SET, FOUR, CARD_ADDING,
  WHICH_SIDE, TEXT_AND_IMAGES, USER_TEXT, PROCESSING, CHANGED_TEXT, SAVING_OR_SIDE_CHANGING,
- USER_CHOICE, USER_FILE, IMAGE_QUERY, NUMBER_OF_PICTURES, WHICH_IMAGE
- ) = map(chr, range(16))
+ USER_CHOICE, USER_FILE, IMAGE_QUERY, NUMBER_OF_PICTURES, WHICH_IMAGE, SENT_PICS, PICTURE_OPTION
+ ) = map(chr, range(18))
 numbers = ''
 
 my_font = ImageFont.truetype('sfns-display-bold.ttf', size=20)
@@ -68,6 +68,8 @@ class CardSide:
         self.text = txt
         self.decor_coords = img_pasting_coords
         self.text_coords = text_pasting_coords
+        self.image_size = 485, 300
+        self.pil_img = Image.new("RGB", self.image_size, (255, 247, 245))
 
     def get_text(self):
         return self.text
@@ -75,19 +77,49 @@ class CardSide:
     def get_self_img(self):
         return self.card_img
 
-    def make_image(self) -> bytes:
-        img = Image.new("RGB", (485, 300), (255, 247, 245))
-        # my_font2 = ImageFont.truetype('globersemiboldfree.ttf', size=18)
-        # decor = Image.open(urlopen('https://images.unsplash.com/photo-1579362816626-1ea1d0b7fa8a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=Mnw0MjgxMTh8MHwxfHNlYXJjaHwyfHwlRDAlQjQlRDAlQjUlRDAlQkIlRDElOEMlRDElODQlRDAlQjglRDAlQkQlRDElOEJ8cnV8MHx8fHwxNjgwODkwMzk5&ixlib=rb-4.0.3&q=80&w=162&h=100')) # как добавить картинку на отправляемое изображение
-        # # class 'PIL.JpegImagePlugin.JpegImageFile
-        # img.paste(decor, (100, 100))
-        draw_text = ImageDraw.Draw(img)
-        if self.text:
-            draw_text.text(self.text_coords, self.text, font=my_font, fill=('#1C0606'))
+    def add_text(self, txt: str):
+        draw_text = ImageDraw.Draw(self.pil_img)
+        # draw_text.text(self.text_coords, txt, font=my_font, fill=('#1C0606'))
+        self.text = txt
+        # print(draw_text.textlength(self.text, my_font), (self.image_size[0] - 20))
+        number_of_lines = (draw_text.textlength(self.text, my_font) // (self.image_size[0] - 20)) + 1
+        # print(number_of_lines)
+        words = txt.split()
+        # print(words)
+        lines = []
+        for i in range(0, int(number_of_lines) + 1):
+            text_line = []
+            for word in words:
+                if (draw_text.textlength(' '.join(text_line), my_font) + draw_text.textlength(word, my_font)) <= (
+                        self.image_size[0] - 20):
+                    text_line.append(word)
+                else:
+                    lines.append(text_line)
+                    # print(text_line)
+                    draw_text.text((self.text_coords[0], self.text_coords[1] + i * 30),
+                                   ' '.join(text_line), font=my_font, fill='#1C0606')
+                    words = [word for word in words if word not in text_line]
+
+        print(lines)
+
         # print(draw_text.textsize(self.text, my_font)) с помощью этой штуки переводить текст на другую строчку,
         # она возвращает размер этого текста
+
+    def add_pic(self, url):
+
+        params = f'&w={self.image_size[0] + 20}&h={self.image_size[1]}'
+        print(url + params)
+        decor = Image.open(urlopen(url + params))  # как добавить картинку на отправляемое изображение
+        # class 'PIL.JpegImagePlugin.JpegImageFile
+        self.pil_img.paste(decor, (0, 0))
+        self.decor_img = decor
+        if self.text:
+            self.add_text(self.text)
+
+    def make_image(self) -> bytes:
+        # my_font2 = ImageFont.truetype('globersemiboldfree.ttf', size=18)
         imgByteArr = io.BytesIO()
-        img.save(imgByteArr, format='PNG')
+        self.pil_img.save(imgByteArr, format='PNG')
         imgByteArr = imgByteArr.getvalue()
         self.card_img = imgByteArr
         return self.card_img
@@ -107,6 +139,15 @@ def remove_job_if_exists(name, context):
 def make_regex(number):
     string = '|'.join(map(str, range(1, number + 1)))
     return string
+
+
+def group_numbers(number):
+    if not number % 3:
+        grouped_by_3 = [list(str(n) for n in range(i, i + 3)) for i in range(1, number, 3)]
+    else:
+        grouped_by_3 = [list(str(n) for n in range(i, i + 3)) for i in range(1, number - (number % 3), 3)] + [list(
+            map(str, range(number - (number % 3) + 1, number + 1)))]
+    return grouped_by_3
 
 
 async def start(update: Update, context: CallbackContext):
@@ -220,6 +261,12 @@ async def add_inf(update: Update, context: CallbackContext):
 
 
 async def text(update: Update, context: CallbackContext):
+    if CURRENT_PICTURE in context.user_data.keys():
+        if context.user_data[CURRENT_PICTURE].text:
+            await update.message.reply_text('Что вы хотите сделать с существующим текстом?',
+                                            reply_markup=ReplyKeyboardMarkup(
+                                                [['Изменить'], ['Дополнить'], ['Сохранить']]))
+            return PROCESSING
     await update.message.reply_text('Напишите текст, который хотите видеть на этой стороне',
                                     reply_markup=ReplyKeyboardRemove())
     return USER_TEXT
@@ -227,15 +274,17 @@ async def text(update: Update, context: CallbackContext):
 
 async def text_adding(update: Update, context: CallbackContext):
     msg = update.message.text + ' '
-    context.user_data[CURRENT_PICTURE] = \
-        CardSide(context.user_data[CURRENT_SIDE], msg)
+    if CURRENT_PICTURE not in context.user_data.keys():
+        context.user_data[CURRENT_PICTURE] = \
+            CardSide(context.user_data[CURRENT_SIDE])
+    context.user_data[CURRENT_PICTURE].add_text(msg)
     await update.message.reply_photo(context.user_data[CURRENT_PICTURE].make_image(),
                                      caption='Вот так будет выглядеть эта сторона',
                                      reply_markup=ReplyKeyboardMarkup([['Изменить'], ['Дополнить'], ['Сохранить'], ]))
     return PROCESSING
 
 
-async def change(update: Update, context: CallbackContext):
+async def change_text(update: Update, context: CallbackContext):
     context.user_data[TEXT_STATE] = update.message.text
     await update.message.reply_text('Напишите текст, который хотите добавить или на который заменить',
                                     reply_markup=ReplyKeyboardMarkup([['Сохранить']]))
@@ -327,13 +376,12 @@ async def image_query(update: Update, context: CallbackContext):
 
 async def number_of_pictures(update: Update, context: CallbackContext):
     context.user_data[USER_QUERY] = update.message.text
-    await update.message.reply_text('Сколько изображений вы хотите увидеть? Отправьте число от 1 до 20')
+    await update.message.reply_text('Сколько изображений вы хотите увидеть? Отправьте число от 1 до 10')
     return NUMBER_OF_PICTURES
 
 
 async def image_search(update: Update, context: CallbackContext):
     global numbers
-    number = 1
     try:
         number = int(update.message.text)
     except ValueError as err:
@@ -341,22 +389,75 @@ async def image_search(update: Update, context: CallbackContext):
         await update.effective_message.reply_text('Извините, количество страниц должно быть числом')
         return
     numbers = make_regex(number)
+    # print(numbers)
     url = f'https://api.unsplash.com/search/photos?page=1&query={context.user_data[USER_QUERY]}&per_page={number}&lang=ru'
     async with aiohttp.ClientSession() as session:
         task = [get_images(url, session)]
         for future in asyncio.as_completed(task):
             data = await future
     pictures_urls = list(map(InputMediaPhoto, [picture['urls']['small'] for picture in data['results']]))
-    print(pictures_urls)
+    context.user_data[SENT_PICS] = pictures_urls
+    # print(pictures_urls)
+    grouped_by_3 = group_numbers(number)
+
     await context.bot.send_media_group(update.effective_message.chat_id, pictures_urls)
-    await update.message.reply_text('Какое изображение добавить?',
-                                    reply_markup=ReplyKeyboardMarkup([list(str(n)) for n in range(1, number + 1)]))
+    await update.message.reply_text('Какое изображение добавить на карту?',
+                                    reply_markup=ReplyKeyboardMarkup(grouped_by_3))
 
     return WHICH_IMAGE
 
 
-def image_adding(update: Update, context: CallbackContext):
-    pass
+async def image_adding(update: Update, context: CallbackContext):
+    try:
+        image_number = int(update.message.text)
+    except ValueError as err:
+        logger.error(err)
+        await update.message.reply_text(
+            'Я пока не умею отвечать на такие сообщения, введите, пожалуйста, номер')
+        return
+    if int(image_number) > len(context.user_data[SENT_PICS]):
+        await update.message.reply_text(f'Изображений только {len(context.user_data[SENT_PICS])}')
+        return
+    image_url = context.user_data[SENT_PICS][int(image_number) - 1].media[:-6]
+    print(image_url)
+    if CURRENT_PICTURE not in context.user_data.keys():
+        context.user_data[CURRENT_PICTURE] = \
+            CardSide(context.user_data[CURRENT_SIDE])
+    msg = context.user_data[CURRENT_PICTURE].text
+    context.user_data[CURRENT_PICTURE] = CardSide(context.user_data[CURRENT_SIDE], msg)
+    context.user_data[CURRENT_PICTURE].add_pic(image_url)
+    await update.message.reply_photo(context.user_data[CURRENT_PICTURE].make_image(),
+                                     caption='Вот так будет выглядеть эта сторона',
+                                     reply_markup=ReplyKeyboardMarkup(
+                                         [['Изменить'], ['Удалить'], ['Сохранить'], ]))
+    return PICTURE_OPTION
+
+
+async def change_picture(update: Update, context: CallbackContext):
+    await update.message.reply_text('На какое изображение заменить?',
+                                    reply_markup=ReplyKeyboardMarkup([['Добавить свой файл', 'Поиск картинки'],
+                                                                      ['Выбрать другое изображение из запроса']]))
+    return USER_CHOICE
+
+
+async def other_pic(update: Update, context: CallbackContext):
+    grouped_by_3 = group_numbers(len(context.user_data[SENT_PICS]))
+
+    await context.bot.send_media_group(update.effective_message.chat_id, context.user_data[SENT_PICS])
+    await update.message.reply_text('Какое изображение добавить на карту?',
+                                    reply_markup=ReplyKeyboardMarkup(grouped_by_3))
+
+    return WHICH_IMAGE
+
+
+async def delete_picture(update: Update, context: CallbackContext):
+    msg = context.user_data[CURRENT_PICTURE].text
+    context.user_data[CURRENT_PICTURE] = CardSide(context.user_data[CURRENT_SIDE], msg)
+    await update.message.reply_photo(context.user_data[CURRENT_PICTURE].make_image(),
+                                     caption='Дополнительное изображение удалено',
+                                     reply_markup=ReplyKeyboardMarkup([['Добавить текст'],
+                                                                       ['Добавить изображение']]))
+    return TEXT_AND_IMAGES
 
 
 async def help(update: Update, context: CallbackContext):
@@ -372,6 +473,7 @@ async def stop(update: Update, context: CallbackContext):
 
 
 def main():
+    global numbers
     application = Application.builder().token(BOT_TOKEN).build()
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
@@ -386,9 +488,9 @@ def main():
             BACK: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start)],
             NOTIF_SET: [MessageHandler(filters.Regex("^(Назад)$") & ~filters.COMMAND, start),
 
-                        MessageHandler(
-                            filters.Regex(f"^({regex})$") & ~filters.COMMAND, notif_setting
-                        ),
+                        # MessageHandler(
+                        #     filters.Regex(f"^({regex})$") & ~filters.COMMAND, notif_setting
+                        # ),
                         MessageHandler(filters.TEXT & ~filters.COMMAND, notif_setting)],
             CARD_ADDING: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start),
                           MessageHandler(filters.Regex("^(Добавить новую карту)$") & ~filters.COMMAND, card_adding)],
@@ -397,8 +499,8 @@ def main():
             TEXT_AND_IMAGES: [MessageHandler(filters.Regex("^(Добавить текст)$") & ~filters.COMMAND, text),
                               MessageHandler(filters.Regex("^(Добавить изображение)$") & ~filters.COMMAND, image)],
             USER_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, text_adding)],
-            PROCESSING: [MessageHandler(filters.Regex("^(Изменить)$") & ~filters.COMMAND, change),
-                         MessageHandler(filters.Regex("^(Дополнить)$") & ~filters.COMMAND, change),
+            PROCESSING: [MessageHandler(filters.Regex("^(Изменить)$") & ~filters.COMMAND, change_text),
+                         MessageHandler(filters.Regex("^(Дополнить)$") & ~filters.COMMAND, change_text),
                          MessageHandler(filters.Regex("^(Сохранить)$") & ~filters.COMMAND, saving)],
             CHANGED_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND &
                                           ~filters.Regex("^(Сохранить)$"), change_card),
@@ -412,12 +514,21 @@ def main():
                                       MessageHandler(filters.Regex("^(Сохранить карту)$") & ~filters.COMMAND,
                                                      card_saving)],
             USER_CHOICE: [MessageHandler(filters.Regex("^(Добавить свой файл)$") & ~filters.COMMAND, file_adding),
-                          MessageHandler(filters.Regex("^(Поиск картинки)$") & ~filters.COMMAND, image_query)],
+                          MessageHandler(filters.Regex("^(Поиск картинки)$") & ~filters.COMMAND, image_query),
+                          MessageHandler(
+                              filters.Regex("^(Выбрать другое изображение из запроса)$") & ~filters.COMMAND,
+                              other_pic)
+                          ],
             IMAGE_QUERY: [MessageHandler(filters.TEXT & ~filters.COMMAND &
                                          ~filters.Regex("^(Назад)$"), number_of_pictures),
                           MessageHandler(filters.Regex("^(Назад)$") & ~filters.COMMAND, add_inf)],
             NUMBER_OF_PICTURES: [MessageHandler(filters.TEXT & ~filters.COMMAND, image_search)],
-            WHICH_IMAGE: [MessageHandler(filters.Regex(f"^({numbers})$") & ~filters.COMMAND, image_adding)]
+            WHICH_IMAGE: [
+                # MessageHandler(filters.Regex(f"^({numbers})$") & ~filters.COMMAND, image_adding),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, image_adding)],
+            PICTURE_OPTION: [MessageHandler(filters.Regex("^(Изменить)$") & ~filters.COMMAND, change_picture),
+                         MessageHandler(filters.Regex("^(Удалить)$") & ~filters.COMMAND, delete_picture),
+                         MessageHandler(filters.Regex("^(Сохранить)$") & ~filters.COMMAND, saving)]
             # END_ROUTES: [
             #     CallbackQueryHandler(start_over, pattern="^" + str(ONE) + "$"),
             #     CallbackQueryHandler(end, pattern="^" + str(TWO) + "$"),

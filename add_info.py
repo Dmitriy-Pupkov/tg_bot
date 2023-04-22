@@ -41,7 +41,7 @@ async def image_sending(update: Update, context: CallbackContext):
     img = Image.new("RGB", (485, 300), (255, 241, 206))
     my_font = ImageFont.truetype('sfns-display-bold.ttf', size=20)
     # my_font2 = ImageFont.truetype('globersemiboldfree.ttf', size=18)
-    # decor = Image.open(urlopen('https://images.unsplash.com/photo-1579362816626-1ea1d0b7fa8a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=Mnw0MjgxMTh8MHwxfHNlYXJjaHwyfHwlRDAlQjQlRDAlQjUlRDAlQkIlRDElOEMlRDElODQlRDAlQjglRDAlQkQlRDElOEJ8cnV8MHx8fHwxNjgwODkwMzk5&ixlib=rb-4.0.3&q=80&w=162&h=100')) # как добавить картинку на отправляемое изображение
+    # decor = Image.open(urlopen('https://images.unsplash.com/photo-1579362816626-1ea1d0b7fa8a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=Mnw0MjgxMTh8MHwxfHNlYXJjaHwyfHwlRDAlQjQlRDAlQjUlRDAlQkIlRDElOEMlRDElODQlRDAlQjglRDAlQkQlRDElOEJ8cnV8MHx8fHwxNjgwODkwMzk5&ixlib=rb-4.0.3&q=80&w=485&h=300')) # как добавить картинку на отправляемое изображение
     # img.paste(decor, (100, 100))
     draw_text = ImageDraw.Draw(img)
     draw_text.text((50, 50), msg, font=my_font, fill=('#1C0606'))
@@ -66,14 +66,16 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_message.reply_text('Нужно указать параметр')
         return
 
-    url = f'https://api.unsplash.com/search/photos?page=1&query={query}&per_page=6&lang=ru'
+    url = f'https://api.unsplash.com/search/photos?page=1&query={query}&per_page=11&lang=ru'
     async with aiohttp.ClientSession() as session:
         task = [get_images(url, session)]
         for future in asyncio.as_completed(task):
             data = await future
     pictures_urls = list(map(InputMediaPhoto, [picture['urls']['small'] for picture in data['results']]))
     print(pictures_urls)
-    await context.bot.send_media_group(update.effective_message.chat_id, pictures_urls)
+    await context.bot.send_media_group(update.effective_message.chat_id, pictures_urls[:10])
+    if len(pictures_urls) > 10:
+        await context.bot.send_media_group(update.effective_message.chat_id, pictures_urls[10:])
 
 
 async def start(update, context):
