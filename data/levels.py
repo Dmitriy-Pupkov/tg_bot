@@ -12,3 +12,5 @@ class Levels(SqlAlchemyBase):
                            primary_key=True, autoincrement=True)
     days_period = sqlalchemy.Column(sqlalchemy.Integer)
     repetition_date = sqlalchemy.Column(sqlalchemy.DateTime, nullable=True)
+    user_id = sqlalchemy.Column(sqlalchemy.Integer)
+    level_number = sqlalchemy.Column(sqlalchemy.Integer)
