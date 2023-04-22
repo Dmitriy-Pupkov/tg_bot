@@ -142,16 +142,16 @@ if __name__ == '__main__':
     if os.name == 'nt':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     db_session.global_init("db/cards.db")
-    # db_sess = db_session.create_session()
-    # i = 1
-    # while i != 128:
-    #     level = Levels(days_period=i)
-    #     db_sess.add(level)
-    #     db_sess.commit()
-    #     i *= 2
+    db_sess = db_session.create_session()
+    i = 1
+    while i != 128:
+        level = Levels(days_period=i)
+        db_sess.add(level)
+        db_sess.commit()
+        i *= 2
     # period = db_sess.query(Levels).filter(Levels.id == 1)
-    # first_card = Cards(front_side=os.path.join('front_sides', '1'), back_side=os.path.join('back_sides', '1'), level=1)
+    first_card = Cards(front_side=os.path.join('front_sides', '1'), back_side=os.path.join('back_sides', '1'), level=1)
     # db_sess = db_session.create_session()
-    # db_sess.add(first_card)
-    # db_sess.commit()
+    db_sess.add(first_card)
+    db_sess.commit()
     main()

@@ -170,39 +170,45 @@ async def start_session(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
     db_sess = db_session.create_session()
-    iters = []
-    for i in db_sess.query(Users.user_id):
-        iters.append(i[0])
-    if update.effective_message.chat_id not in iters:
-        print(update.effective_message.chat_id, iters)  #
-        if SESSION_NUMBER not in context.user_data.keys():
-            context.user_data[SESSION_NUMBER] = 1
-            level = Levels()
-            count_i = -1
-            days_per_list = [1, 2, 4, 8, 16, 32, 64]
-            for i in range(7):
-                level.repetition_date = datetime.date.today() + datetime.timedelta(
-                    days=FIRST_REP_INTERVAlS[level.id - 1])
-                level.days_period = days_per_list[count_i + 1]
-                level.user_id = update.effective_message.chat_id
-                db_sess.add(level)
-                db_sess.commit()
-            # for level in db_sess.query(Levels):
-            #     level.repetition_date = datetime.date.today() + datetime.timedelta(
-            #         days=FIRST_REP_INTERVAlS[level.id - 1])
-            #     # print(level.repetition_date, datetime.date.today())
-            #     db_sess.commit()
-
-            user = Users()
-            user.user_id = update.effective_message.chat_id
-            db_sess.add(user)
+    if SESSION_NUMBER not in context.user_data.keys():
+        context.user_data[SESSION_NUMBER] = 1
+        for level in db_sess.query(Levels):
+            level.repetition_date = datetime.date.today() + datetime.timedelta(days=FIRST_REP_INTERVAlS[level.id - 1])
+            # print(level.repetition_date, datetime.date.today())
             db_sess.commit()
+    # iters = []
+    # for i in db_sess.query(Users.user_id):
+    #     iters.append(i[0])
+    # if update.effective_message.chat_id not in iters:
+    #     print(update.effective_message.chat_id, iters)  #
+    #     if SESSION_NUMBER not in context.user_data.keys():
+    #         context.user_data[SESSION_NUMBER] = 1
+    #         level = Levels()
+    #         count_i = -1
+    #         days_per_list = [1, 2, 4, 8, 16, 32, 64]
+    #         for i in range(7):
+    #             level.repetition_date = datetime.date.today() + datetime.timedelta(
+    #                 days=FIRST_REP_INTERVAlS[level.id - 1])
+    #             level.days_period = days_per_list[count_i + 1]
+    #             level.user_id = update.effective_message.chat_id
+    #             db_sess.add(level)
+    #             db_sess.commit()
+    #         # for level in db_sess.query(Levels):
+    #         #     level.repetition_date = datetime.date.today() + datetime.timedelta(
+    #         #         days=FIRST_REP_INTERVAlS[level.id - 1])
+    #         #     # print(level.repetition_date, datetime.date.today())
+    #         #     db_sess.commit()
+    #
+    #         user = Users()
+    #         user.user_id = update.effective_message.chat_id
+    #         db_sess.add(user)
+    #         db_sess.commit()
 
     for_today = []
-    # for level in db_sess.query(Levels).filter(
-    #         Levels.repetition_date == datetime.date.today().strftime('%Y-%m-%d 00:00:00.000000'), update.effective_message.chat_id == level.user_id):
-    #     for_today.append(str(level.id))
-
+    for level in db_sess.query(Levels).filter(
+            Levels.repetition_date == datetime.date.today().strftime('%Y-%m-%d 00:00:00.000000')):
+        for_today.append(str(level.id))
+    print(for_today)
     await query.message.reply_text(
         f'''Отлично! Сессия начата. Сегодня на проверке уровни {', '.join(sorted(for_today, reverse=True))}''',
         reply_markup=ReplyKeyboardMarkup([['В главное меню'], ['Добавить новую карту']]))
