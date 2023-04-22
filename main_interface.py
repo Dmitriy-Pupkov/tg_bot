@@ -38,8 +38,8 @@ USER_QUERY = 'image_query'
 NUMBERS_REGEX = 'numbers_regex'
 (MAIN_MENU, BACK, NOTIF_SET, FOUR, CARD_ADDING,
  WHICH_SIDE, TEXT_AND_IMAGES, USER_TEXT, PROCESSING, CHANGED_TEXT, SAVING_OR_SIDE_CHANGING,
- USER_CHOICE, USER_FILE, IMAGE_QUERY, NUMBER_OF_PICTURES, WHICH_IMAGE, SENT_PICS, PICTURE_OPTION
- ) = map(chr, range(18))
+ USER_CHOICE, USER_FILE, IMAGE_QUERY, NUMBER_OF_PICTURES, WHICH_IMAGE, SENT_PICS, PICTURE_OPTION, FILE_SENDING
+ ) = map(chr, range(19))
 numbers = ''
 
 my_font = ImageFont.truetype('sfns-display-bold.ttf', size=20)
@@ -87,19 +87,23 @@ class CardSide:
         words = txt.split()
         # print(words)
         lines = []
-        for i in range(0, int(number_of_lines) + 1):
+        for i in range(0, int(number_of_lines)):
             text_line = []
             for word in words:
                 if (draw_text.textlength(' '.join(text_line), my_font) + draw_text.textlength(word, my_font)) <= (
                         self.image_size[0] - 20):
                     text_line.append(word)
+                    #  and draw_text.textlength(' '.join(words), my_font) >= \
+                    #                         (self.image_size[0] - 20)
                 else:
                     lines.append(text_line)
                     # print(text_line)
                     draw_text.text((self.text_coords[0], self.text_coords[1] + i * 30),
                                    ' '.join(text_line), font=my_font, fill='#1C0606')
                     words = [word for word in words if word not in text_line]
-
+                    break
+                draw_text.text((self.text_coords[0], self.text_coords[1] + i * 30), ' '.join(text_line), font=my_font,
+                               fill='#1C0606')
         print(lines)
 
         # print(draw_text.textsize(self.text, my_font)) с помощью этой штуки переводить текст на другую строчку,
@@ -107,7 +111,7 @@ class CardSide:
 
     def add_pic(self, url):
 
-        params = f'&w={self.image_size[0] + 20}&h={self.image_size[1]}'
+        params = f'&w={self.image_size[0] + 70}&h={self.image_size[1]}'
         print(url + params)
         decor = Image.open(urlopen(url + params))  # как добавить картинку на отправляемое изображение
         # class 'PIL.JpegImagePlugin.JpegImageFile
@@ -134,11 +138,6 @@ def remove_job_if_exists(name, context):
     for job in current_jobs:
         job.schedule_removal()
     return True
-
-
-def make_regex(number):
-    string = '|'.join(map(str, range(1, number + 1)))
-    return string
 
 
 def group_numbers(number):
@@ -304,7 +303,7 @@ async def change_text(update: Update, context: CallbackContext):
 
 
 async def change_card(update: Update, context: CallbackContext):
-    old_text = context.user_data[CURRENT_PICTURE].get_text()
+    old_text = context.user_data[CURRENT_PICTURE].text
     new_text = ''
     if context.user_data[TEXT_STATE] == 'Изменить':
         new_text = update.message.text
@@ -312,6 +311,7 @@ async def change_card(update: Update, context: CallbackContext):
         new_text = old_text + update.message.text
     # card_img = context.user_data[CURRENT_PICTURE].get_self_img()
     context.user_data[CURRENT_PICTURE] = CardSide(context.user_data[CURRENT_SIDE], new_text)
+    context.user_data[CURRENT_PICTURE].add_text(new_text)
     await update.message.reply_photo(context.user_data[CURRENT_PICTURE].make_image(),
                                      caption='Вот так будет выглядеть эта сторона',
                                      reply_markup=ReplyKeyboardMarkup([['Изменить'], ['Дополнить'], ['Сохранить']]))
@@ -369,7 +369,7 @@ async def image(update: Update, context: CallbackContext):
 async def file_adding(update: Update, context: CallbackContext):
     await update.message.reply_text(
         'Отправьте файл изображения, которое хотите видеть на карточке в формате jpg или png')
-    # return USER_CHOICE
+    return FILE_SENDING
 
 
 async def get_images(url, session: aiohttp.ClientSession):
@@ -392,14 +392,12 @@ async def number_of_pictures(update: Update, context: CallbackContext):
 
 
 async def image_search(update: Update, context: CallbackContext):
-    global numbers
     try:
         number = int(update.message.text)
     except ValueError as err:
         logger.error(err)
         await update.effective_message.reply_text('Извините, количество страниц должно быть числом')
         return
-    numbers = make_regex(number)
     # print(numbers)
     url = f'https://api.unsplash.com/search/photos?page=1&query={context.user_data[USER_QUERY]}&per_page={number}&lang=ru'
     async with aiohttp.ClientSession() as session:
@@ -471,6 +469,11 @@ async def delete_picture(update: Update, context: CallbackContext):
     return TEXT_AND_IMAGES
 
 
+async def get_file(update: Update, context: CallbackContext):
+    file = update.message.document
+    print(file)
+
+
 async def help(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
@@ -498,10 +501,6 @@ def main():
             ],
             BACK: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start)],
             NOTIF_SET: [MessageHandler(filters.Regex("^(Назад)$") & ~filters.COMMAND, start),
-
-                        # MessageHandler(
-                        #     filters.Regex(f"^({regex})$") & ~filters.COMMAND, notif_setting
-                        # ),
                         MessageHandler(filters.TEXT & ~filters.COMMAND, notif_setting)],
             CARD_ADDING: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start),
                           MessageHandler(filters.Regex("^(Добавить новую карту)$") & ~filters.COMMAND, card_adding)],
@@ -535,11 +534,11 @@ def main():
                           MessageHandler(filters.Regex("^(Назад)$") & ~filters.COMMAND, add_inf)],
             NUMBER_OF_PICTURES: [MessageHandler(filters.TEXT & ~filters.COMMAND, image_search)],
             WHICH_IMAGE: [
-                # MessageHandler(filters.Regex(f"^({numbers})$") & ~filters.COMMAND, image_adding),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, image_adding)],
             PICTURE_OPTION: [MessageHandler(filters.Regex("^(Изменить)$") & ~filters.COMMAND, change_picture),
                              MessageHandler(filters.Regex("^(Удалить)$") & ~filters.COMMAND, delete_picture),
-                             MessageHandler(filters.Regex("^(Сохранить)$") & ~filters.COMMAND, saving)]
+                             MessageHandler(filters.Regex("^(Сохранить)$") & ~filters.COMMAND, saving)],
+            FILE_SENDING: [MessageHandler(filters.Document.ALL, get_file)]
             # END_ROUTES: [
             #     CallbackQueryHandler(start_over, pattern="^" + str(ONE) + "$"),
             #     CallbackQueryHandler(end, pattern="^" + str(TWO) + "$"),
