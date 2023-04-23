@@ -200,10 +200,9 @@ async def start_session(update: Update, context: CallbackContext):
             Levels.repetition_date == datetime.date.today().strftime('%Y-%m-%d 00:00:00.000000'),
             Levels.user_id.in_(cur_user_id)):
         for_today.append(str(level.level_number))
-        break
 
     await query.message.reply_text(
-        f'''Отлично! Сессия начата. Сегодня на проверке уровни: {', '.join(sorted(for_today, reverse=True))}''',
+        f'''Отлично! Сессия начата. Сегодня на проверке уровни: {', '.join(sorted(for_today))}''',
         reply_markup=ReplyKeyboardMarkup([['В главное меню'], ['Добавить новую карту']]))
     # for level in db_sess.query(Levels).filter(Levels.id.in_(for_today)):
     #     repetition_date = level.repetition_date + datetime.timedelta(days=level.days_period)
