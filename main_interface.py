@@ -178,13 +178,14 @@ async def start_session(update: Update, context: CallbackContext):
             context.user_data[SESSION_NUMBER] = 1
             days_per_list = [2 ** i for i in range(7)]
             count_i = -1
-            for level in db_sess.query(Levels):
+            for num, level in enumerate(db_sess.query(Levels)):
                 count_i += 1
                 level_e = Levels()
                 level_e.repetition_date = datetime.date.today() + datetime.timedelta(
                     days=FIRST_REP_INTERVAlS[level.id - 1])
                 level_e.days_period = days_per_list[count_i]
                 level_e.user_id = update.effective_message.chat_id
+                level_e.level_number = num + 1
                 db_sess.add(level_e)
                 db_sess.commit()
 
@@ -198,11 +199,11 @@ async def start_session(update: Update, context: CallbackContext):
     for level in db_sess.query(Levels).filter(
             Levels.repetition_date == datetime.date.today().strftime('%Y-%m-%d 00:00:00.000000'),
             Levels.user_id.in_(cur_user_id)):
-        for_today.append(str(level.id))
+        for_today.append(str(level.level_number))
         break
 
     await query.message.reply_text(
-        f'''Отлично! Сессия начата. Сегодня на проверке уровни {', '.join(sorted(for_today, reverse=True))}''',
+        f'''Отлично! Сессия начата. Сегодня на проверке уровни: {', '.join(sorted(for_today, reverse=True))}''',
         reply_markup=ReplyKeyboardMarkup([['В главное меню'], ['Добавить новую карту']]))
     # for level in db_sess.query(Levels).filter(Levels.id.in_(for_today)):
     #     repetition_date = level.repetition_date + datetime.timedelta(days=level.days_period)
