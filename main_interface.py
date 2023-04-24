@@ -165,27 +165,22 @@ async def start_session(update: Update, context: CallbackContext):
     iters = []
     for i in db_sess.query(Users.user_id):
         iters.append(i[0])
-    if update.effective_message.chat_id not in iters:
-        print(update.effective_message.chat_id, iters)  #
-        if SESSION_NUMBER not in context.user_data.keys():
-            context.user_data[SESSION_NUMBER] = 1
-            days_per_list = [2 ** i for i in range(7)]
-            count_i = -1
-            for num, level in enumerate(db_sess.query(Levels)):
-                count_i += 1
-                level_e = Levels()
-                level_e.repetition_date = datetime.date.today() + datetime.timedelta(
-                    days=FIRST_REP_INTERVAlS[level.id - 1])
-                level_e.days_period = days_per_list[count_i]
-                level_e.user_id = update.effective_message.chat_id
-                level_e.level_number = num + 1
-                db_sess.add(level_e)
-                db_sess.commit()
-
-            user = Users()
-            user.user_id = update.effective_message.chat_id
-            db_sess.add(user)
+    if (update.effective_message.chat_id not in iters) and (SESSION_NUMBER not in context.user_data.keys()):
+        context.user_data[SESSION_NUMBER] = 1
+        days_per_list = [2 ** i for i in range(7)]
+        for i in range(7):
+            level_e = Levels()
+            level_e.repetition_date = datetime.date.today() + datetime.timedelta(
+                days=FIRST_REP_INTERVAlS[i])
+            level_e.days_period = days_per_list[i]
+            level_e.user_id = update.effective_message.chat_id
+            level_e.level_number = i + 1
+            db_sess.add(level_e)
             db_sess.commit()
+        user = Users()
+        user.user_id = update.effective_message.chat_id
+        db_sess.add(user)
+        db_sess.commit()
 
     for_today = []
     cur_user_id = [update.effective_message.chat_id]
