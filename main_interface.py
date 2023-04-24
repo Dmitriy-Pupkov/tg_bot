@@ -42,7 +42,7 @@ NUMBERS_REGEX = 'numbers_regex'
  ) = map(chr, range(19))
 numbers = ''
 
-my_font = ImageFont.truetype('sfns-display-bold.ttf', size=20)
+my_font = ImageFont.truetype('sfns-display-bold.ttf', size=25)
 time_keyboard = [['Назад'],
                  ['8:00', '9:00', '10:00', '11:00'],
                  ['12:00', '13:00', '14:00', '15:00'],
@@ -68,7 +68,7 @@ class CardSide:
         self.text = txt
         self.decor_coords = img_pasting_coords
         self.text_coords = text_pasting_coords
-        self.image_size = 485, 300
+        self.image_size = 400, 300
         self.pil_img = Image.new("RGB", self.image_size, (255, 247, 245))
 
     def get_text(self):
@@ -79,42 +79,35 @@ class CardSide:
 
     def add_text(self, txt: str):
         draw_text = ImageDraw.Draw(self.pil_img)
-        # draw_text.text(self.text_coords, txt, font=my_font, fill=('#1C0606'))
         self.text = txt
-        # print(draw_text.textlength(self.text, my_font), (self.image_size[0] - 20))
         number_of_lines = (draw_text.textlength(self.text, my_font) // (self.image_size[0] - 20)) + 1
-        # print(number_of_lines)
         words = txt.split()
-        # print(words)
         lines = []
         for i in range(0, int(number_of_lines)):
             text_line = []
             for word in words:
                 if (draw_text.textlength(' '.join(text_line), my_font) + draw_text.textlength(word, my_font)) <= (
-                        self.image_size[0] - 20):
+                        self.image_size[0] - 30):
+                    print(draw_text.textlength(' '.join(words), my_font), (self.image_size[0] - 30))
+                    if draw_text.textlength(' '.join(words), my_font) < (self.image_size[0] - 30):
+                        lines.append(words)
+                        break
                     text_line.append(word)
-                    #  and draw_text.textlength(' '.join(words), my_font) >= \
-                    #                         (self.image_size[0] - 20)
                 else:
                     lines.append(text_line)
-                    # print(text_line)
-                    draw_text.text((self.text_coords[0], self.text_coords[1] + i * 30),
-                                   ' '.join(text_line), font=my_font, fill='#1C0606')
-                    words = [word for word in words if word not in text_line]
+                    print(text_line)
+                    words = words[len(text_line):]
                     break
-                draw_text.text((self.text_coords[0], self.text_coords[1] + i * 30), ' '.join(text_line), font=my_font,
-                               fill='#1C0606')
-        print(lines)
-
-        # print(draw_text.textsize(self.text, my_font)) с помощью этой штуки переводить текст на другую строчку,
-        # она возвращает размер этого текста
+        for i in range(len(lines)):
+            draw_text.text((self.text_coords[0], self.text_coords[1] + i * 30), ' '.join(lines[i]), font=my_font,
+                           fill='#1C0606')
 
     def add_pic(self, url):
-
-        params = f'&w={self.image_size[0] + 70}&h={self.image_size[1]}'
+        params = f'&h={self.image_size[1]}'
         print(url + params)
         decor = Image.open(urlopen(url + params))  # как добавить картинку на отправляемое изображение
         # class 'PIL.JpegImagePlugin.JpegImageFile
+        self.pil_img = self.pil_img.resize(decor.size)
         self.pil_img.paste(decor, (0, 0))
         self.decor_img = decor
         if self.text:
@@ -213,8 +206,10 @@ async def start_session(update: Update, context: CallbackContext):
 async def set_goal(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
-    await query.message.reply_text('Установите цель повторений', reply_markup=reply_markup)
-    return BACK
+
+    await query.message.reply_text('Установите цель повторений',
+                                   reply_markup=ReplyKeyboardMarkup([['В главное меню'], ['Добавить новую карту']]))
+    return CARD_ADDING
 
 
 async def set_notification(update: Update, context: CallbackContext):
@@ -404,7 +399,8 @@ async def image_search(update: Update, context: CallbackContext):
         task = [get_images(url, session)]
         for future in asyncio.as_completed(task):
             data = await future
-    pictures_urls = list(map(InputMediaPhoto, [picture['urls']['small'] for picture in data['results']]))
+    pictures_urls = list(map(InputMediaPhoto, [picture['urls']['regular'] for picture in data['results']]))
+    print(pictures_urls)
     context.user_data[SENT_PICS] = pictures_urls
     # print(pictures_urls)
     grouped_by_3 = group_numbers(number)
@@ -427,7 +423,7 @@ async def image_adding(update: Update, context: CallbackContext):
     if int(image_number) > len(context.user_data[SENT_PICS]):
         await update.message.reply_text(f'Изображений только {len(context.user_data[SENT_PICS])}')
         return
-    image_url = context.user_data[SENT_PICS][int(image_number) - 1].media[:-6]
+    image_url = context.user_data[SENT_PICS][int(image_number) - 1].media
     print(image_url)
     if CURRENT_PICTURE not in context.user_data.keys():
         context.user_data[CURRENT_PICTURE] = \
