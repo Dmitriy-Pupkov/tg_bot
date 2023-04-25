@@ -36,10 +36,12 @@ FINISHED_SIDE = 'finished_side'
 TEXT_STATE = 'text_state'
 USER_QUERY = 'image_query'
 NUMBERS_REGEX = 'numbers_regex'
+goal = ''
 (MAIN_MENU, BACK, NOTIF_SET, FOUR, CARD_ADDING,
  WHICH_SIDE, TEXT_AND_IMAGES, USER_TEXT, PROCESSING, CHANGED_TEXT, SAVING_OR_SIDE_CHANGING,
- USER_CHOICE, USER_FILE, IMAGE_QUERY, NUMBER_OF_PICTURES, WHICH_IMAGE, SENT_PICS, PICTURE_OPTION, FILE_SENDING
- ) = map(chr, range(19))
+ USER_CHOICE, USER_FILE, IMAGE_QUERY, NUMBER_OF_PICTURES, WHICH_IMAGE, SENT_PICS, PICTURE_OPTION, FILE_SENDING,
+ USER_GOAL
+ ) = map(chr, range(20))
 numbers = ''
 
 my_font = ImageFont.truetype('sfns-display-bold.ttf', size=25)
@@ -102,11 +104,14 @@ class CardSide:
             draw_text.text((self.text_coords[0], self.text_coords[1] + i * 30), ' '.join(lines[i]), font=my_font,
                            fill='#1C0606')
 
-    def add_pic(self, url):
+    def add_pic(self, url='', filename=''):
         params = f'&h={self.image_size[1]}'
-        print(url + params)
-        decor = Image.open(urlopen(url + params))  # как добавить картинку на отправляемое изображение
-        # class 'PIL.JpegImagePlugin.JpegImageFile
+        if url:
+            print(url + params)
+            decor = Image.open(urlopen(url + params))  # как добавить картинку на отправляемое изображение
+        if filename:
+            decor = Image.open(filename)
+            # class 'PIL.JpegImagePlugin.JpegImageFile
         self.pil_img = self.pil_img.resize(decor.size)
         self.pil_img.paste(decor, (0, 0))
         self.decor_img = decor
@@ -145,11 +150,11 @@ def group_numbers(number):
 async def start(update: Update, context: CallbackContext):
     keyboard = [
         [
-            InlineKeyboardButton("Начать сессию", callback_data=str(MAIN_MENU)),
-            InlineKeyboardButton("Установить цель", callback_data=str(BACK)),
+            InlineKeyboardButton("Начать сессию 📚", callback_data=str(MAIN_MENU)),
+            InlineKeyboardButton("Установить цель🎯", callback_data=str(BACK)),
         ],
-        [InlineKeyboardButton("Установить время ежедневного напоминания", callback_data=str(NOTIF_SET))],
-        [InlineKeyboardButton("О методе интервальных повторений", callback_data=str(FOUR))]
+        [InlineKeyboardButton("Установить время ежедневного напоминания⏳", callback_data=str(NOTIF_SET))],
+        [InlineKeyboardButton("О методе интервальных повторений🔍", callback_data=str(FOUR))]
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -190,7 +195,7 @@ async def start_session(update: Update, context: CallbackContext):
         for_today.append(str(level.level_number))
 
     await query.message.reply_text(
-        f'''Отлично! Сессия начата. Сегодня на проверке уровни: {', '.join(sorted(for_today))}''',
+        f'''Отлично! Сессия начата. Сегодня на проверке уровни: {', '.join(sorted(for_today, reverse=True))}''',
         reply_markup=ReplyKeyboardMarkup([['В главное меню'], ['Добавить новую карту']]))
     # for level in db_sess.query(Levels).filter(Levels.id.in_(for_today)):
     #     repetition_date = level.repetition_date + datetime.timedelta(days=level.days_period)
@@ -202,9 +207,21 @@ async def set_goal(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
 
-    await query.message.reply_text('Установите цель повторений',
-                                   reply_markup=ReplyKeyboardMarkup([['В главное меню'], ['Добавить новую карту']]))
-    return CARD_ADDING
+    await query.message.reply_text(
+        'Напишите, что вы хотите выучить с помощью метода интервальных повторений! Я буду напоминать вам об этом каждый день, чтобы вы не теряли мотивацию💪',
+        reply_markup=ReplyKeyboardMarkup([['В главное меню']]))
+    return USER_GOAL
+
+
+async def goal_saving(update: Update, context: CallbackContext):
+    global goal
+    user_goal = update.message.text
+    goal = user_goal.lower()
+    print(goal)
+    await update.message.reply_text(
+        "Хорошо, я запомнил, для чего вы это делаете😏",
+        reply_markup=ReplyKeyboardMarkup([['В главное меню']]))
+    return BACK
 
 
 async def set_notification(update: Update, context: CallbackContext):
@@ -236,9 +253,14 @@ async def notif_setting(update: Update, context: CallbackContext):
 
 
 async def notification(context: CallbackContext):
+    global goal
     job = context.job
-    await context.bot.send_message(job.chat_id,
-                                   text='Привет! Пора повторить важную информацию для достижения твоей цели!')
+    if goal:
+        await context.bot.send_message(job.chat_id,
+                                       text=f'Привет! Пора повторить важную информацию для того, чтобы {goal}☺ ')
+    else:
+        await context.bot.send_message(job.chat_id,
+                                       text=f'Привет! Пора повторить важную информацию, чтобы не забыть её ☺ ')
 
 
 async def card_adding(update: Update, context: CallbackContext):
@@ -256,7 +278,7 @@ async def add_inf(update: Update, context: CallbackContext):
         context.user_data[CURRENT_SIDE] = 'back'
     await update.message.reply_text(
         '''Добавьте нужную вам информацию. Помните, что лучше создать много карточек с отдельными фактами, чем одну большую 😉''',
-        reply_markup=ReplyKeyboardMarkup([['Добавить текст'], ['Добавить изображение']]))
+        reply_markup=ReplyKeyboardMarkup([['Добавить текст'], ['Добавить изображение'], ['Назад']]))
     return TEXT_AND_IMAGES
 
 
@@ -268,7 +290,7 @@ async def text(update: Update, context: CallbackContext):
                                                 [['Изменить'], ['Дополнить'], ['Сохранить']]))
             return PROCESSING
     await update.message.reply_text('Напишите текст, который хотите видеть на этой стороне',
-                                    reply_markup=ReplyKeyboardRemove())
+                                    reply_markup=ReplyKeyboardMarkup([['Назад']]))
     return USER_TEXT
 
 
@@ -395,7 +417,6 @@ async def image_search(update: Update, context: CallbackContext):
         for future in asyncio.as_completed(task):
             data = await future
     pictures_urls = list(map(InputMediaPhoto, [picture['urls']['regular'] for picture in data['results']]))
-    print(pictures_urls)
     context.user_data[SENT_PICS] = pictures_urls
     # print(pictures_urls)
     grouped_by_3 = group_numbers(number)
@@ -425,7 +446,7 @@ async def image_adding(update: Update, context: CallbackContext):
             CardSide(context.user_data[CURRENT_SIDE])
     msg = context.user_data[CURRENT_PICTURE].text
     context.user_data[CURRENT_PICTURE] = CardSide(context.user_data[CURRENT_SIDE], msg)
-    context.user_data[CURRENT_PICTURE].add_pic(image_url)
+    context.user_data[CURRENT_PICTURE].add_pic(url=image_url)
     await update.message.reply_photo(context.user_data[CURRENT_PICTURE].make_image(),
                                      caption='Вот так будет выглядеть эта сторона',
                                      reply_markup=ReplyKeyboardMarkup(
@@ -460,9 +481,25 @@ async def delete_picture(update: Update, context: CallbackContext):
     return TEXT_AND_IMAGES
 
 
-async def get_file(update: Update, context: CallbackContext):
-    file = update.message.document
-    print(file)
+async def get_photo(update: Update, context: CallbackContext):
+    photo = update.message.effective_attachment
+    if photo:
+        user_file = await context.bot.get_file(photo[-1].file_id)
+        photo_path = os.path.join('user_images', f'{photo[-1].file_unique_id}.jpg')
+        await user_file.download_to_drive(photo_path)
+        if CURRENT_PICTURE not in context.user_data.keys():
+            context.user_data[CURRENT_PICTURE] = \
+                CardSide(context.user_data[CURRENT_SIDE])
+        msg = context.user_data[CURRENT_PICTURE].text
+        context.user_data[CURRENT_PICTURE] = CardSide(context.user_data[CURRENT_SIDE], msg)
+        context.user_data[CURRENT_PICTURE].add_pic(filename=photo_path)
+        await update.message.reply_photo(context.user_data[CURRENT_PICTURE].make_image(),
+                                         caption='Вот так будет выглядеть эта сторона',
+                                         reply_markup=ReplyKeyboardMarkup(
+                                             [['Изменить'], ['Удалить'], ['Сохранить'], ]))
+        return PICTURE_OPTION
+    else:
+        await update.message.reply_text("Вы сказали, что отправите свой файл")
 
 
 async def help(update: Update, context: CallbackContext):
@@ -498,8 +535,10 @@ def main():
             WHICH_SIDE: [MessageHandler(filters.Regex("^(Лицевая сторона)$") & ~filters.COMMAND, add_inf),
                          MessageHandler(filters.Regex("^(Обратная сторона)$") & ~filters.COMMAND, add_inf)],
             TEXT_AND_IMAGES: [MessageHandler(filters.Regex("^(Добавить текст)$") & ~filters.COMMAND, text),
-                              MessageHandler(filters.Regex("^(Добавить изображение)$") & ~filters.COMMAND, image)],
-            USER_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, text_adding)],
+                              MessageHandler(filters.Regex("^(Добавить изображение)$") & ~filters.COMMAND, image),
+                              MessageHandler(filters.Regex("^(Назад)$") & ~filters.COMMAND, card_adding)],
+            USER_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex("^(Назад)$"), text_adding),
+                        MessageHandler(filters.Regex("^(Назад)$") & ~filters.COMMAND, add_inf)],
             PROCESSING: [MessageHandler(filters.Regex("^(Изменить)$") & ~filters.COMMAND, change_text),
                          MessageHandler(filters.Regex("^(Дополнить)$") & ~filters.COMMAND, change_text),
                          MessageHandler(filters.Regex("^(Сохранить)$") & ~filters.COMMAND, saving)],
@@ -529,7 +568,10 @@ def main():
             PICTURE_OPTION: [MessageHandler(filters.Regex("^(Изменить)$") & ~filters.COMMAND, change_picture),
                              MessageHandler(filters.Regex("^(Удалить)$") & ~filters.COMMAND, delete_picture),
                              MessageHandler(filters.Regex("^(Сохранить)$") & ~filters.COMMAND, saving)],
-            FILE_SENDING: [MessageHandler(filters.Document.ALL, get_file)]
+            FILE_SENDING: [MessageHandler(filters.PHOTO, get_photo)],
+            USER_GOAL: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start),
+                        MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex("^(В главное меню)$"),
+                                       goal_saving)]
             # END_ROUTES: [
             #     CallbackQueryHandler(start_over, pattern="^" + str(ONE) + "$"),
             #     CallbackQueryHandler(end, pattern="^" + str(TWO) + "$"),
