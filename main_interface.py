@@ -37,12 +37,13 @@ TEXT_STATE = 'text_state'
 USER_QUERY = 'image_query'
 NUMBERS_REGEX = 'numbers_regex'
 goal = ''
-(MAIN_MENU, BACK, NOTIF_SET, FOUR, CARD_ADDING, CARD_CHECKING,
+(MAIN_MENU, BACK, NOTIF_SET, FOUR, CARD_ADDING,
  WHICH_SIDE, TEXT_AND_IMAGES, USER_TEXT, PROCESSING, CHANGED_TEXT, SAVING_OR_SIDE_CHANGING,
  USER_CHOICE, USER_FILE, IMAGE_QUERY, NUMBER_OF_PICTURES, WHICH_IMAGE, SENT_PICS, PICTURE_OPTION, FILE_SENDING,
- USER_GOAL
- ) = map(chr, range(21))
+ USER_GOAL, CARD_CHECKING, GO_TO_FIRST, GO_TO_NEXT_LEVEL
+ ) = map(chr, range(23))
 numbers = ''
+card_id = 0
 
 my_font = ImageFont.truetype('sfns-display-bold.ttf', size=25)
 time_keyboard = [['Назад'],
@@ -290,6 +291,33 @@ async def card_checking(update: Update, context: CallbackContext):
         data = pic.read()
     await update.message.reply_photo(data)
     return CARD_ADDING
+
+
+async def go_to_first(update: Update, context: CallbackContext):
+    global card_id
+    db_sess = db_session.create_session()
+    for card in db_sess.query(Cards):
+        if card.id == card_id:
+            card.level = 1
+            await update.message.reply_text(f'Карточка вернулась на 1 уровень')
+    return CARD_CHECKING
+
+
+async def go_to_next_level(update: Update, context: CallbackContext):
+    global card_id
+    db_sess = db_session.create_session()
+    for card in db_sess.query(Cards):
+        if card.level == 7:
+            db_sess.delete(card)
+            db_sess.commit()
+            os.remove(f'back_sides/{card.id}.jpg')
+            os.remove(f'front_sides/{card.id}.jpg')
+            await update.message.reply_text(f'Поздравляю, вы прошли карточку!')
+        elif card.id == card_id:
+            card.level += 1
+            db_sess.commit()
+            await update.message.reply_text(f'Карточка перешла на {card.level} уровень!')
+    return CARD_CHECKING
 
 
 async def card_adding(update: Update, context: CallbackContext):
@@ -560,7 +588,6 @@ def main():
             BACK: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start)],
             NOTIF_SET: [MessageHandler(filters.Regex("^(Назад)$") & ~filters.COMMAND, start),
                         MessageHandler(filters.TEXT & ~filters.COMMAND, notif_setting)],
-            CARD_CHECKING: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start)],
             CARD_ADDING: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start),
                           MessageHandler(filters.Regex("^(Добавить новую карту)$") & ~filters.COMMAND, card_adding)],
             WHICH_SIDE: [MessageHandler(filters.Regex("^(Лицевая сторона)$") & ~filters.COMMAND, add_inf),
@@ -602,7 +629,11 @@ def main():
             FILE_SENDING: [MessageHandler(filters.PHOTO, get_photo)],
             USER_GOAL: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start),
                         MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex("^(В главное меню)$"),
-                                       goal_saving)]
+                                       goal_saving)],
+            CARD_CHECKING: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start),
+                            MessageHandler(filters.TEXT & ~filters.COMMAND, card_checking)],
+            GO_TO_FIRST: [MessageHandler(filters.TEXT & ~filters.COMMAND, go_to_first)],
+            GO_TO_NEXT_LEVEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, go_to_next_level)]
             # END_ROUTES: [
             #     CallbackQueryHandler(start_over, pattern="^" + str(ONE) + "$"),
             #     CallbackQueryHandler(end, pattern="^" + str(TWO) + "$"),
