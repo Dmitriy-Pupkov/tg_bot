@@ -293,16 +293,56 @@ async def notification(context: CallbackContext):
                                        text=f'Привет! Пора повторить важную информацию, чтобы не забыть её ☺ ')
 
 
+async def go_to_first(update: Update, context: CallbackContext):
+    global card_id
+    db_sess = db_session.create_session()
+    for card in db_sess.query(Cards):
+        if card.id == card_id:
+            card.level = 1
+            await update.message.reply_text(f'Карточка вернулась на 1 уровень')
+    return CARD_CHECKING
+
+
+async def go_to_next_level(update: Update, context: CallbackContext):
+    db_sess = db_session.create_session()
+    for card in db_sess.query(Cards):
+        if card.level == 7:
+            db_sess.delete(card)
+            db_sess.commit()
+            os.remove(f'back_sides/{card.id}.jpg')
+            os.remove(f'front_sides/{card.id}.jpg')
+            await update.message.reply_text(f'Поздравляю, вы прошли карточку!')
+        elif card.id == card_id:
+            card.level += 1
+            db_sess.commit()
+            await update.message.reply_text(f'Карточка перешла на {card.level} уровень!')
+    return CARD_CHECKING
+
+
 async def card_showing(update: Update, context: CallbackContext):
     global level_index
     msg = update.message.text
+    db_sess = db_session.create_session()
     if msg != 'Да, хорошо':
         with open(context.user_data[CURRENT_CARD].back_side + '.jpg', mode='rb') as pic:
             data = pic.read()
     if msg == 'Помню':
+        card = db_sess.query(Cards).filter(Cards.id == context.user_data[CURRENT_CARD].id).first()
+        if card.level == 7:
+            db_sess.delete(card)
+            db_sess.commit()
+            os.remove(f'back_sides/{card.id}.jpg')
+            os.remove(f'front_sides/{card.id}.jpg')
+            await update.message.reply_text(f'Поздравляю, эта карта ушла из игры!')
+        else:
+            card.level += 1
+            db_sess.commit()
         await update.message.reply_photo(data, caption=f'Отлично, карта переходит на следующий уровень! Теперь дальше',
                                          reply_markup=ReplyKeyboardRemove())
     elif msg == 'Не помню':
+        card = db_sess.query(Cards).filter(Cards.id == context.user_data[CURRENT_CARD].id).first()
+        card.level = 1
+        db_sess.commit()
         await update.message.reply_photo(data, caption=f'Упс, карта возвращается на 1 уровень! Теперь дальше',
                                          reply_markup=ReplyKeyboardRemove())
     cards = context.user_data[CARDS_FOR_TODAY]

@@ -1,0 +1,5 @@
+SQLAlchemy==2.0.7
+alembic==1.10.3
+python-dotenv==1.0.0
+aiohttp==3.8.4
+Pillow==9.4.0
