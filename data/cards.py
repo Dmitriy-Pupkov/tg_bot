@@ -9,6 +9,7 @@ class Cards(SqlAlchemyBase):
                            primary_key=True, autoincrement=True)
     front_side = sqlalchemy.Column(sqlalchemy.String)
     back_side = sqlalchemy.Column(sqlalchemy.String)
-    level = sqlalchemy.Column(sqlalchemy.Integer, sqlalchemy.ForeignKey("levels.id"))
+    level = sqlalchemy.Column(sqlalchemy.Integer, sqlalchemy.ForeignKey("levels.level_number"))
+    user_id = sqlalchemy.Column(sqlalchemy.Integer)
 
 

@@ -37,11 +37,11 @@ TEXT_STATE = 'text_state'
 USER_QUERY = 'image_query'
 NUMBERS_REGEX = 'numbers_regex'
 goal = ''
-(MAIN_MENU, BACK, NOTIF_SET, FOUR, CARD_ADDING,
+(MAIN_MENU, BACK, NOTIF_SET, FOUR, CARD_ADDING, CARD_CHECKING,
  WHICH_SIDE, TEXT_AND_IMAGES, USER_TEXT, PROCESSING, CHANGED_TEXT, SAVING_OR_SIDE_CHANGING,
  USER_CHOICE, USER_FILE, IMAGE_QUERY, NUMBER_OF_PICTURES, WHICH_IMAGE, SENT_PICS, PICTURE_OPTION, FILE_SENDING,
  USER_GOAL
- ) = map(chr, range(20))
+ ) = map(chr, range(21))
 numbers = ''
 
 my_font = ImageFont.truetype('sfns-display-bold.ttf', size=25)
@@ -200,7 +200,13 @@ async def start_session(update: Update, context: CallbackContext):
     # for level in db_sess.query(Levels).filter(Levels.id.in_(for_today)):
     #     repetition_date = level.repetition_date + datetime.timedelta(days=level.days_period)
     #     print(repetition_date)
-    return CARD_ADDING
+    cards = []
+    for card in db_sess.query(Cards).filter(Cards.user_id.in_(cur_user_id)):
+        cards.append(card)
+    if not cards:
+        return CARD_ADDING
+    else:
+        return CARD_CHECKING
 
 
 async def set_goal(update: Update, context: CallbackContext):
@@ -261,6 +267,29 @@ async def notification(context: CallbackContext):
     else:
         await context.bot.send_message(job.chat_id,
                                        text=f'Привет! Пора повторить важную информацию, чтобы не забыть её ☺ ')
+
+
+async def card_checking(update: Update, context: CallbackContext):
+    db_sess = db_session.create_session()
+    cur_user_id = [update.effective_message.chat_id]
+    for_today = []
+    for level_num in db_sess.query(Levels).filter(
+            Levels.repetition_date == datetime.date.today().strftime('%Y-%m-%d 00:00:00.000000'),
+            Levels.user_id.in_(cur_user_id)):
+        for_today.append(level_num.level_number)
+    cards_today = []
+    for card in db_sess.query(Cards):
+        if card.user_id == update.effective_message.chat_id and card.level.in_(for_today):
+            f_s = int(str(card.front_side)[-1:])
+            b_s = int(str(card.back_side)[-1:])
+            whole_card = []
+            whole_card.append(f_s)
+            whole_card.append(b_s)
+            cards_today.append(whole_card)
+    with open(f'front_sides/{cards_today[0][0]}.jpg', mode='rb') as pic:
+        data = pic.read()
+    await update.message.reply_photo(data)
+    return CARD_ADDING
 
 
 async def card_adding(update: Update, context: CallbackContext):
@@ -364,7 +393,8 @@ async def card_saving(update: Update, context: CallbackContext):
         with open(f'{sides[i]}_sides/{next_number}.jpg', 'wb') as side:
             side.write(pictures[i].get_self_img())
     new_card = Cards(front_side=os.path.join('front_sides', str(next_number)),
-                     back_side=os.path.join('back_sides', str(next_number)), level=1)
+                     back_side=os.path.join('back_sides', str(next_number)), level=1,
+                     user_id=update.effective_message.chat_id)
     db_sess.add(new_card)
     db_sess.commit()
     await update.message.reply_text('Замечательно, новая карта сохранена!',
@@ -530,6 +560,7 @@ def main():
             BACK: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start)],
             NOTIF_SET: [MessageHandler(filters.Regex("^(Назад)$") & ~filters.COMMAND, start),
                         MessageHandler(filters.TEXT & ~filters.COMMAND, notif_setting)],
+            CARD_CHECKING: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start)],
             CARD_ADDING: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start),
                           MessageHandler(filters.Regex("^(Добавить новую карту)$") & ~filters.COMMAND, card_adding)],
             WHICH_SIDE: [MessageHandler(filters.Regex("^(Лицевая сторона)$") & ~filters.COMMAND, add_inf),
