@@ -352,17 +352,18 @@ async def card_showing(update: Update, context: CallbackContext):
             reply_markup=ReplyKeyboardMarkup([['Закончить сессию'], ['Добавить новую карту']]))
         return CARD_ADDING
     for_today = context.user_data[LEVELS_FOR_TODAY]
-    one_level = [card for card in cards if card.level == int(for_today[level_index])][0]
+    print(for_today, level_index, int(for_today[level_index]))
+    one_level = [card for card in cards if card.level == int(for_today[level_index])]
     if not one_level:
         level_index += 1
-        one_level = [card for card in cards if card.level == int(for_today[level_index])][0]
+        one_level = [card for card in cards if card.level == int(for_today[level_index])]
     # print(one_level.front_side + '.jpg')
-    with open(one_level.front_side + '.jpg', mode='rb') as pic:
+    with open(one_level[0].front_side + '.jpg', mode='rb') as pic:
         data = pic.read()
     await update.message.reply_photo(data, caption=f'Уровень {for_today[level_index]}',
                                      reply_markup=ReplyKeyboardMarkup([['Помню'], ['Не помню']]))
-    context.user_data[CARDS_FOR_TODAY] = [card for card in cards if card.id != one_level.id]
-    context.user_data[CURRENT_CARD] = one_level
+    context.user_data[CARDS_FOR_TODAY] = [card for card in cards if card.id != one_level[0].id]
+    context.user_data[CURRENT_CARD] = one_level[0]
     return CARD_CHECKING
 
 
