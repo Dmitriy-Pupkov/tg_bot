@@ -3,6 +3,7 @@ import logging
 import datetime
 import asyncio
 import io
+import random
 from urllib.request import urlopen
 
 from dotenv import load_dotenv
@@ -36,11 +37,15 @@ FINISHED_SIDE = 'finished_side'
 TEXT_STATE = 'text_state'
 USER_QUERY = 'image_query'
 NUMBERS_REGEX = 'numbers_regex'
+CARDS_FOR_TODAY = 'cards_for_today'
+LEVELS_FOR_TODAY = 'levels_for_today'
+CURRENT_CARD = 'current_card'
 goal = ''
-(MAIN_MENU, BACK, NOTIF_SET, FOUR, CARD_ADDING, CARD_CHECKING,
+level_index = 0
+(MAIN_MENU, BACK, NOTIF_SET, FOUR, CARD_ADDING,
  WHICH_SIDE, TEXT_AND_IMAGES, USER_TEXT, PROCESSING, CHANGED_TEXT, SAVING_OR_SIDE_CHANGING,
  USER_CHOICE, USER_FILE, IMAGE_QUERY, NUMBER_OF_PICTURES, WHICH_IMAGE, SENT_PICS, PICTURE_OPTION, FILE_SENDING,
- USER_GOAL
+ USER_GOAL,  CARD_CHECKING,
  ) = map(chr, range(21))
 numbers = ''
 
@@ -97,7 +102,6 @@ class CardSide:
                     text_line.append(word)
                 else:
                     lines.append(text_line)
-                    print(text_line)
                     words = words[len(text_line):]
                     break
         for i in range(len(lines)):
@@ -108,13 +112,13 @@ class CardSide:
         params = f'&h={self.image_size[1]}'
         if url:
             print(url + params)
-            decor = Image.open(urlopen(url + params))  # как добавить картинку на отправляемое изображение
+            self.decor_img = Image.open(urlopen(url + params))  # как добавить картинку на отправляемое изображение
         if filename:
-            decor = Image.open(filename)
+            self.decor_img = Image.open(filename)
             # class 'PIL.JpegImagePlugin.JpegImageFile
-        self.pil_img = self.pil_img.resize(decor.size)
-        self.pil_img.paste(decor, (0, 0))
-        self.decor_img = decor
+        self.image_size = self.decor_img.size
+        self.pil_img = self.pil_img.resize(self.decor_img.size)
+        self.pil_img.paste(self.decor_img, (0, 0))
         if self.text:
             self.add_text(self.text)
 
@@ -193,19 +197,39 @@ async def start_session(update: Update, context: CallbackContext):
             Levels.repetition_date == datetime.date.today().strftime('%Y-%m-%d 00:00:00.000000'),
             Levels.user_id.in_(cur_user_id)):
         for_today.append(str(level.level_number))
-
+    for_today = sorted(for_today, reverse=True)
+    context.user_data[LEVELS_FOR_TODAY] = for_today
     await query.message.reply_text(
-        f'''Отлично! Сессия начата. Сегодня на проверке уровни: {', '.join(sorted(for_today, reverse=True))}''',
-        reply_markup=ReplyKeyboardMarkup([['В главное меню'], ['Добавить новую карту']]))
+        f'''Отлично! Сессия начата. Сегодня на проверке уровни: {', '.join(sorted(for_today, reverse=True))}''')
     # for level in db_sess.query(Levels).filter(Levels.id.in_(for_today)):
     #     repetition_date = level.repetition_date + datetime.timedelta(days=level.days_period)
     #     print(repetition_date)
     cards = []
-    for card in db_sess.query(Cards).filter(Cards.user_id.in_(cur_user_id)):
+    for card in db_sess.query(Cards).filter(Cards.user_id.in_(cur_user_id) & Cards.level.in_(for_today)):
         cards.append(card)
     if not cards:
+        await query.message.reply_text(
+            f'''У вас пока ещё нет карт для проверки, создайте новые карты''',
+            reply_markup=ReplyKeyboardMarkup([['В главное меню'], ['Добавить новую карту']]))
         return CARD_ADDING
     else:
+        context.user_data[CARDS_FOR_TODAY] = cards
+        one_level = [card for card in cards if card.level == int(for_today[0])]
+        if not one_level:
+
+            await query.message.reply_text(
+                f'''На уровне {for_today[0]} ещё нет карточек, идём дальше''',
+                reply_markup=ReplyKeyboardMarkup([['Да, хорошо']]))
+            context.user_data[LEVELS_FOR_TODAY].pop(0)
+        else:
+            random.shuffle(one_level)
+            print(one_level[0].front_side + '.jpg')
+            with open(one_level[0].front_side + '.jpg', mode='rb') as pic:
+                data = pic.read()
+            await query.message.reply_photo(data, caption=f'Уровень {for_today[0]}',
+                                            reply_markup=ReplyKeyboardMarkup([['Помню'], ['Не помню']]))
+            context.user_data[CARDS_FOR_TODAY] = [card for card in cards if card.id != one_level[0].id]
+            context.user_data[CURRENT_CARD] = one_level[0]
         return CARD_CHECKING
 
 
@@ -251,7 +275,7 @@ async def notif_setting(update: Update, context: CallbackContext):
         return
     job_removed = remove_job_if_exists(str(chat_id), context)
     context.job_queue.run_daily(notification, time, name=str(chat_id), chat_id=chat_id)
-    text = f'Замечательно! Ежедневное напоминание установлено на {time} '
+    text = f'Замечательно! Ежедневное напоминание установлено на {time.strftime("%H:%M")} '
     if job_removed:
         text += 'и старое время удалено.'
     await update.message.reply_text(text, reply_markup=reply_markup)
@@ -269,27 +293,37 @@ async def notification(context: CallbackContext):
                                        text=f'Привет! Пора повторить важную информацию, чтобы не забыть её ☺ ')
 
 
-async def card_checking(update: Update, context: CallbackContext):
-    db_sess = db_session.create_session()
-    cur_user_id = [update.effective_message.chat_id]
-    for_today = []
-    for level_num in db_sess.query(Levels).filter(
-            Levels.repetition_date == datetime.date.today().strftime('%Y-%m-%d 00:00:00.000000'),
-            Levels.user_id.in_(cur_user_id)):
-        for_today.append(level_num.level_number)
-    cards_today = []
-    for card in db_sess.query(Cards):
-        if card.user_id == update.effective_message.chat_id and card.level.in_(for_today):
-            f_s = int(str(card.front_side)[-1:])
-            b_s = int(str(card.back_side)[-1:])
-            whole_card = []
-            whole_card.append(f_s)
-            whole_card.append(b_s)
-            cards_today.append(whole_card)
-    with open(f'front_sides/{cards_today[0][0]}.jpg', mode='rb') as pic:
+async def card_showing(update: Update, context: CallbackContext):
+    global level_index
+    msg = update.message.text
+    if msg != 'Да, хорошо':
+        with open(context.user_data[CURRENT_CARD].back_side + '.jpg', mode='rb') as pic:
+            data = pic.read()
+    if msg == 'Помню':
+        await update.message.reply_photo(data, caption=f'Отлично, карта переходит на следующий уровень! Теперь дальше',
+                                         reply_markup=ReplyKeyboardRemove())
+    elif msg == 'Не помню':
+        await update.message.reply_photo(data, caption=f'Упс, карта возвращается на 1 уровень! Теперь дальше',
+                                         reply_markup=ReplyKeyboardRemove())
+    cards = context.user_data[CARDS_FOR_TODAY]
+    if not cards:
+        await update.message.reply_text(
+            'Замечательно, вы повторили все карты на сегодня! Теперь можете добавить новые или закончить сессию',
+            reply_markup=ReplyKeyboardMarkup([['Закончить сессию'], ['Добавить новую карту']]))
+        return CARD_ADDING
+    for_today = context.user_data[LEVELS_FOR_TODAY]
+    one_level = [card for card in cards if card.level == int(for_today[level_index])][0]
+    if not one_level:
+        level_index += 1
+        one_level = [card for card in cards if card.level == int(for_today[level_index])][0]
+    # print(one_level.front_side + '.jpg')
+    with open(one_level.front_side + '.jpg', mode='rb') as pic:
         data = pic.read()
-    await update.message.reply_photo(data)
-    return CARD_ADDING
+    await update.message.reply_photo(data, caption=f'Уровень {for_today[level_index]}',
+                                     reply_markup=ReplyKeyboardMarkup([['Помню'], ['Не помню']]))
+    context.user_data[CARDS_FOR_TODAY] = [card for card in cards if card.id != one_level.id]
+    context.user_data[CURRENT_CARD] = one_level
+    return CARD_CHECKING
 
 
 async def card_adding(update: Update, context: CallbackContext):
@@ -351,8 +385,13 @@ async def change_card(update: Update, context: CallbackContext):
     if context.user_data[TEXT_STATE] == 'Дополнить':
         new_text = old_text + update.message.text
     # card_img = context.user_data[CURRENT_PICTURE].get_self_img()
+    old_image = ''
+    if context.user_data[CURRENT_PICTURE].decor_img:
+        old_image = context.user_data[CURRENT_PICTURE].decor_img
     context.user_data[CURRENT_PICTURE] = CardSide(context.user_data[CURRENT_SIDE], new_text)
     context.user_data[CURRENT_PICTURE].add_text(new_text)
+    if old_image:
+        context.user_data[CURRENT_PICTURE].add_pic(old_image)
     await update.message.reply_photo(context.user_data[CURRENT_PICTURE].make_image(),
                                      caption='Вот так будет выглядеть эта сторона',
                                      reply_markup=ReplyKeyboardMarkup([['Изменить'], ['Дополнить'], ['Сохранить']]))
@@ -377,6 +416,7 @@ async def side_changing(update: Update, context: CallbackContext):
         context.user_data[CURRENT_SIDE] = 'back'
     else:
         context.user_data[CURRENT_SIDE] = 'front'
+    context.user_data.pop(CURRENT_PICTURE)
     await update.message.reply_text('Отлично, вы оформили одну сторону карточки, теперь давайте оформим вторую!',
                                     reply_markup=ReplyKeyboardMarkup([['Добавить текст'],
                                                                       ['Добавить изображение']]))
@@ -535,7 +575,10 @@ async def get_photo(update: Update, context: CallbackContext):
 async def help(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
-    await query.message.reply_text('Здесь будет показана справочная информация по боту.', reply_markup=reply_markup)
+    # with open('help_text.txt', mode='r', encoding='utf8') as help_text:
+    #     text = help_text.readlines()
+    text = 'К сожалению, документация ещё не готова, но она обязательно скоро появится! Приносим свои извинения'
+    await query.message.reply_text(text=text, reply_markup=reply_markup)
     return BACK
 
 
@@ -560,9 +603,10 @@ def main():
             BACK: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start)],
             NOTIF_SET: [MessageHandler(filters.Regex("^(Назад)$") & ~filters.COMMAND, start),
                         MessageHandler(filters.TEXT & ~filters.COMMAND, notif_setting)],
-            CARD_CHECKING: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start)],
-            CARD_ADDING: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start),
-                          MessageHandler(filters.Regex("^(Добавить новую карту)$") & ~filters.COMMAND, card_adding)],
+            CARD_ADDING: [MessageHandler(
+                filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start),
+                MessageHandler(filters.Regex("^(Закончить сессию)$") & ~filters.COMMAND, start),
+                MessageHandler(filters.Regex("^(Добавить новую карту)$") & ~filters.COMMAND, card_adding)],
             WHICH_SIDE: [MessageHandler(filters.Regex("^(Лицевая сторона)$") & ~filters.COMMAND, add_inf),
                          MessageHandler(filters.Regex("^(Обратная сторона)$") & ~filters.COMMAND, add_inf)],
             TEXT_AND_IMAGES: [MessageHandler(filters.Regex("^(Добавить текст)$") & ~filters.COMMAND, text),
@@ -602,7 +646,10 @@ def main():
             FILE_SENDING: [MessageHandler(filters.PHOTO, get_photo)],
             USER_GOAL: [MessageHandler(filters.Regex("^(В главное меню)$") & ~filters.COMMAND, start),
                         MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex("^(В главное меню)$"),
-                                       goal_saving)]
+                                       goal_saving)],
+            CARD_CHECKING: [MessageHandler(filters.Regex("^(Помню)$") & ~filters.COMMAND, card_showing),
+                            MessageHandler(filters.Regex("^(Не помню)$") & ~filters.COMMAND, card_showing),
+                            MessageHandler(filters.Regex("^(Да, хорошо)$") & ~filters.COMMAND, card_showing)],
             # END_ROUTES: [
             #     CallbackQueryHandler(start_over, pattern="^" + str(ONE) + "$"),
             #     CallbackQueryHandler(end, pattern="^" + str(TWO) + "$"),
