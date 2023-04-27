@@ -63,7 +63,7 @@ for line in time_keyboard[1:]:
     regex += '|'.join(line) + '|'
 regex = regex[:-1]
 
-reply_markup = ReplyKeyboardMarkup([['В главное меню']])
+main_menu_markup = ReplyKeyboardMarkup([['В главное меню']], one_time_keyboard=True)
 
 
 class CardSide:
@@ -129,8 +129,6 @@ class CardSide:
         imgByteArr = imgByteArr.getvalue()
         self.card_img = imgByteArr
         return self.card_img
-        # with open('front_sides/1.jpg', mode='rb') as pic:
-        #     data = pic.read()
 
 
 def remove_job_if_exists(name, context):
@@ -201,16 +199,17 @@ async def start_session(update: Update, context: CallbackContext):
     context.user_data[LEVELS_FOR_TODAY] = for_today
     await query.message.reply_text(
         f'''Отлично! Сессия начата. Сегодня на проверке уровни: {', '.join(sorted(for_today, reverse=True))}''')
-    # for level in db_sess.query(Levels).filter(Levels.id.in_(for_today)):
-    #     repetition_date = level.repetition_date + datetime.timedelta(days=level.days_period)
-    #     print(repetition_date)
+    for level in db_sess.query(Levels).filter(Levels.level_number.in_(for_today) & Levels.user_id.in_(cur_user_id)):
+        repetition_date = level.repetition_date + datetime.timedelta(days=level.days_period)
+        level.repetition_date = repetition_date
+        db_sess.commit()
     cards = []
     for card in db_sess.query(Cards).filter(Cards.user_id.in_(cur_user_id) & Cards.level.in_(for_today)):
         cards.append(card)
     if not cards:
         await query.message.reply_text(
             f'''У вас пока ещё нет карт для проверки, создайте новые карты''',
-            reply_markup=ReplyKeyboardMarkup([['В главное меню'], ['Добавить новую карту']]))
+            reply_markup=ReplyKeyboardMarkup([['В главное меню'], ['Добавить новую карту']], one_time_keyboard=True))
         return CARD_ADDING
     else:
         context.user_data[CARDS_FOR_TODAY] = cards
@@ -239,7 +238,7 @@ async def set_goal(update: Update, context: CallbackContext):
 
     await query.message.reply_text(
         'Напишите, что вы хотите выучить с помощью метода интервальных повторений! Я буду напоминать вам об этом каждый день, чтобы вы не теряли мотивацию💪',
-        reply_markup=ReplyKeyboardMarkup([['В главное меню']]))
+        reply_markup=main_menu_markup)
     return USER_GOAL
 
 
@@ -250,7 +249,7 @@ async def goal_saving(update: Update, context: CallbackContext):
     print(goal)
     await update.message.reply_text(
         "Хорошо, я запомнил, для чего вы это делаете😏",
-        reply_markup=ReplyKeyboardMarkup([['В главное меню']]))
+        reply_markup=main_menu_markup)
     return BACK
 
 
@@ -278,7 +277,7 @@ async def notif_setting(update: Update, context: CallbackContext):
     text = f'Замечательно! Ежедневное напоминание установлено на {time.strftime("%H:%M")} '
     if job_removed:
         text += 'и старое время удалено.'
-    await update.message.reply_text(text, reply_markup=reply_markup)
+    await update.message.reply_text(text, reply_markup=main_menu_markup)
     return BACK
 
 
@@ -287,36 +286,12 @@ async def notification(context: CallbackContext):
     job = context.job
     if goal:
         await context.bot.send_message(job.chat_id,
-                                       text=f'Привет! Пора повторить важную информацию для того, чтобы {goal}☺ ')
+                                       text=f'Привет! Пора повторить важную информацию для того, чтобы {goal}☺ ',
+                                       reply_markup=ReplyKeyboardRemove())
     else:
         await context.bot.send_message(job.chat_id,
-                                       text=f'Привет! Пора повторить важную информацию, чтобы не забыть её ☺ ')
-
-
-async def go_to_first(update: Update, context: CallbackContext):
-    global card_id
-    db_sess = db_session.create_session()
-    for card in db_sess.query(Cards):
-        if card.id == card_id:
-            card.level = 1
-            await update.message.reply_text(f'Карточка вернулась на 1 уровень')
-    return CARD_CHECKING
-
-
-async def go_to_next_level(update: Update, context: CallbackContext):
-    db_sess = db_session.create_session()
-    for card in db_sess.query(Cards):
-        if card.level == 7:
-            db_sess.delete(card)
-            db_sess.commit()
-            os.remove(f'back_sides/{card.id}.jpg')
-            os.remove(f'front_sides/{card.id}.jpg')
-            await update.message.reply_text(f'Поздравляю, вы прошли карточку!')
-        elif card.id == card_id:
-            card.level += 1
-            db_sess.commit()
-            await update.message.reply_text(f'Карточка перешла на {card.level} уровень!')
-    return CARD_CHECKING
+                                       text=f'Привет! Пора повторить важную информацию, чтобы не забыть её ☺ ',
+                                       reply_markup=ReplyKeyboardRemove())
 
 
 async def card_showing(update: Update, context: CallbackContext):
@@ -352,17 +327,17 @@ async def card_showing(update: Update, context: CallbackContext):
             reply_markup=ReplyKeyboardMarkup([['Закончить сессию'], ['Добавить новую карту']]))
         return CARD_ADDING
     for_today = context.user_data[LEVELS_FOR_TODAY]
-    one_level = [card for card in cards if card.level == int(for_today[level_index])][0]
+    one_level = [card for card in cards if card.level == int(for_today[level_index])]
     if not one_level:
         level_index += 1
-        one_level = [card for card in cards if card.level == int(for_today[level_index])][0]
+        one_level = [card for card in cards if card.level == int(for_today[level_index])]
     # print(one_level.front_side + '.jpg')
-    with open(one_level.front_side + '.jpg', mode='rb') as pic:
+    with open(one_level[0].front_side + '.jpg', mode='rb') as pic:
         data = pic.read()
     await update.message.reply_photo(data, caption=f'Уровень {for_today[level_index]}',
                                      reply_markup=ReplyKeyboardMarkup([['Помню'], ['Не помню']]))
-    context.user_data[CARDS_FOR_TODAY] = [card for card in cards if card.id != one_level.id]
-    context.user_data[CURRENT_CARD] = one_level
+    context.user_data[CARDS_FOR_TODAY] = [card for card in cards if card.id != one_level[0].id]
+    context.user_data[CURRENT_CARD] = one_level[0]
     return CARD_CHECKING
 
 
@@ -550,7 +525,7 @@ async def image_adding(update: Update, context: CallbackContext):
         await update.message.reply_text(f'Изображений только {len(context.user_data[SENT_PICS])}')
         return
     image_url = context.user_data[SENT_PICS][int(image_number) - 1].media
-    print(image_url)
+    # print(image_url)
     if CURRENT_PICTURE not in context.user_data.keys():
         context.user_data[CURRENT_PICTURE] = \
             CardSide(context.user_data[CURRENT_SIDE])
@@ -617,8 +592,9 @@ async def help(update: Update, context: CallbackContext):
     await query.answer()
     # with open('help_text.txt', mode='r', encoding='utf8') as help_text:
     #     text = help_text.readlines()
+    # это не работает, нужно доделать
     text = 'К сожалению, документация ещё не готова, но она обязательно скоро появится! Приносим свои извинения'
-    await query.message.reply_text(text=text, reply_markup=reply_markup)
+    await query.message.reply_text(text=text, reply_markup=main_menu_markup)
     return BACK
 
 
@@ -695,13 +671,6 @@ def main():
             #     CallbackQueryHandler(end, pattern="^" + str(TWO) + "$"),
             # ],
         },
-
-        # states={
-        #     1: [MessageHandler(filters.TEXT & ~filters.COMMAND, start_session)],
-        #     2: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_goal)],
-        #     3: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_notification)],
-        #     4: [MessageHandler(filters.TEXT & ~filters.COMMAND, help)]
-        # },
 
         fallbacks=[CommandHandler('stop', stop)]
     )
