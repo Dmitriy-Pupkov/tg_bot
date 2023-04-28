@@ -45,7 +45,7 @@ level_index = 0
 (MAIN_MENU, BACK, NOTIF_SET, FOUR, CARD_ADDING,
  WHICH_SIDE, TEXT_AND_IMAGES, USER_TEXT, PROCESSING, CHANGED_TEXT, SAVING_OR_SIDE_CHANGING,
  USER_CHOICE, USER_FILE, IMAGE_QUERY, NUMBER_OF_PICTURES, WHICH_IMAGE, SENT_PICS, PICTURE_OPTION, FILE_SENDING,
- USER_GOAL,  CARD_CHECKING,
+ USER_GOAL, CARD_CHECKING,
  ) = map(chr, range(21))
 numbers = ''
 
@@ -594,11 +594,23 @@ async def get_photo(update: Update, context: CallbackContext):
 async def help(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
-    # with open('help_text.txt', mode='r', encoding='utf8') as help_text:
-    #     text = help_text.readlines()
-    # это не работает, нужно доделать
-    text = 'К сожалению, документация ещё не готова, но она обязательно скоро появится! Приносим свои извинения'
-    await query.message.reply_text(text=text, reply_markup=main_menu_markup)
+    with open('help_text1.txt', mode='r', encoding='utf-8') as help_text:
+        text1 = help_text.readlines()
+        text1 = ' '.join(text1)
+    with open('help_text2.txt', mode='r', encoding='utf-8') as help_text:
+        text2 = help_text.readlines()
+        text2 = ' '.join(text2)
+    with open('help_text3.txt', mode='r', encoding='utf-8') as help_text:
+        text3 = help_text.readlines()
+        text3 = ' '.join(text3)
+    with open('help_text4.txt', mode='r', encoding='utf-8') as help_text:
+        text4 = help_text.readlines()
+        text4 = ' '.join(text4)
+
+    await query.message.reply_text(text=text1, reply_markup=main_menu_markup)
+    await query.message.reply_text(text=text2, reply_markup=main_menu_markup)
+    await query.message.reply_text(text=text3, reply_markup=main_menu_markup)
+    await query.message.reply_text(text=text4, reply_markup=main_menu_markup)
     return BACK
 
 
