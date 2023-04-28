@@ -465,7 +465,8 @@ async def image(update: Update, context: CallbackContext):
 
 async def file_adding(update: Update, context: CallbackContext):
     await update.message.reply_text(
-        'Отправьте файл изображения, которое хотите видеть на карточке в формате jpg или png')
+        'Отправьте файл изображения, которое хотите видеть на карточке в формате jpg или png',
+        reply_markup=ReplyKeyboardRemove())
     return FILE_SENDING
 
 
@@ -484,7 +485,8 @@ async def image_query(update: Update, context: CallbackContext):
 
 async def number_of_pictures(update: Update, context: CallbackContext):
     context.user_data[USER_QUERY] = update.message.text
-    await update.message.reply_text('Сколько изображений вы хотите увидеть? Отправьте число от 1 до 10')
+    await update.message.reply_text('Сколько изображений вы хотите увидеть? Отправьте число от 1 до 10',
+                                    reply_markup=ReplyKeyboardRemove())
     return NUMBER_OF_PICTURES
 
 
@@ -570,6 +572,8 @@ async def get_photo(update: Update, context: CallbackContext):
     photo = update.message.effective_attachment
     if photo:
         user_file = await context.bot.get_file(photo[-1].file_id)
+        if not os.path.exists('user_images') or not os.path.isdir('user_images'):
+            os.mkdir('user_images')
         photo_path = os.path.join('user_images', f'{photo[-1].file_unique_id}.jpg')
         await user_file.download_to_drive(photo_path)
         if CURRENT_PICTURE not in context.user_data.keys():
